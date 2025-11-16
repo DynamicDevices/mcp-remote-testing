@@ -2,7 +2,7 @@
 
 [Semantic Versioning](https://semver.org/)
 
-## [0.1.0] - 2025-01-XX
+## [0.1.0] - 2025-11-16
 
 ### Added
 - MCP server for remote lab testing
