@@ -10,6 +10,7 @@ License: GPL-3.0-or-later
 """
 
 import json
+import subprocess
 from typing import Any, Dict, Optional
 
 from lab_testing.config import get_lab_devices_config
@@ -17,9 +18,6 @@ from lab_testing.tools.device_manager import resolve_device_identifier, ssh_to_d
 from lab_testing.utils.logger import get_logger
 
 logger = get_logger()
-
-
-import subprocess
 
 
 def get_device_unique_id_from_ip(

@@ -13,7 +13,7 @@ import subprocess
 from typing import Any, Dict, Optional
 
 from lab_testing.exceptions import DeviceConnectionError, DeviceNotFoundError, SSHError
-from lab_testing.tools.device_manager import get_device_info
+from lab_testing.tools.device_manager import get_device_info as _get_device_info
 from lab_testing.utils.credentials import get_ssh_command
 from lab_testing.utils.logger import get_logger
 
@@ -370,10 +370,6 @@ def list_serial_devices(remote_laptop_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to list serial devices on {remote_laptop_id}: {e}")
         raise SSHError(f"Failed to list serial devices: {e!s}", device_id=remote_laptop_id)
-
-
-# Import get_device_info from device_manager to avoid duplication
-from lab_testing.tools.device_manager import get_device_info as _get_device_info
 
 
 def get_device_info(device_id: str) -> Optional[Dict[str, Any]]:

@@ -12,6 +12,7 @@ from lab_testing.exceptions import (
     DeviceNotFoundError,
     SSHError,
 )
+from lab_testing.utils.credentials import get_ssh_command
 from lab_testing.utils.logger import get_logger
 
 logger = get_logger()
@@ -263,7 +264,7 @@ def ssh_to_device(
     except subprocess.TimeoutExpired:
         error_msg = "SSH command timed out"
         logger.warning(f"SSH timeout for {device_id}: {command}")
-        raise DeviceTimeoutError(error_msg, device_id=device_id)
+        raise SSHError(error_msg, device_id=device_id, command=command)
     except Exception as e:
         error_msg = f"SSH execution failed: {e!s}"
         logger.error(f"SSH error for {device_id}: {e}", exc_info=True)

@@ -10,11 +10,16 @@ License: GPL-3.0-or-later
 
 import sys
 
+from lab_testing.utils.logger import get_logger
+
+logger = get_logger()
+
 
 def test_imports():
     """Test that all modules can be imported"""
     logger.info("Testing imports...")
     try:
+        # Test imports (imported but not used - that's OK for import tests)
         from lab_testing.config import validate_config
         from lab_testing.resources.device_inventory import get_device_inventory
         from lab_testing.resources.network_status import get_network_status

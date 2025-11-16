@@ -22,7 +22,13 @@ from typing import Any, Dict, List
 try:
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import EmbeddedResource, ImageContent, TextContent, TextResourceContents, Tool
+    from mcp.types import (
+        EmbeddedResource,
+        ImageContent,
+        TextContent,
+        TextResourceContents,
+        Tool,
+    )
 except ImportError:
     try:
         # Alternative import structure

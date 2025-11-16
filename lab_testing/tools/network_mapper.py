@@ -159,7 +159,7 @@ def create_network_map(
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                 futures = {
                     executor.submit(test_device, device_id): device_id
-                    for device_id in devices.keys()
+                    for device_id in devices
                 }
 
                 for future in concurrent.futures.as_completed(futures):

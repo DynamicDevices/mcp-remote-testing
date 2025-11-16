@@ -7,6 +7,7 @@ Copyright (C) 2025 Dynamic Devices Ltd
 License: GPL-3.0-or-later
 """
 
+import time
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
