@@ -13,7 +13,7 @@ def load_device_config() -> Dict[str, Any]:
     """Load device configuration from JSON file"""
     config_path = get_lab_devices_config()
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             return json.load(f)
     except FileNotFoundError:
         return {"devices": {}, "lab_infrastructure": {}}
@@ -90,7 +90,7 @@ def test_device(device_id: str) -> Dict[str, Any]:
     try:
         result = subprocess.run(
             ["ping", "-c", "3", "-W", "2", ip],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=10
         )
@@ -102,7 +102,7 @@ def test_device(device_id: str) -> Dict[str, Any]:
         if device.get("ports", {}).get("ssh"):
             ssh_result = subprocess.run(
                 ["nc", "-z", "-w", "2", ip, str(device["ports"]["ssh"])],
-                capture_output=True,
+                check=False, capture_output=True,
                 timeout=5
             )
             ssh_available = ssh_result.returncode == 0
@@ -129,7 +129,7 @@ def test_device(device_id: str) -> Dict[str, Any]:
             "success": False,
             "device_id": device_id,
             "ip": ip,
-            "error": f"Test failed: {str(e)}"
+            "error": f"Test failed: {e!s}"
         }
 
 
@@ -172,17 +172,17 @@ def ssh_to_device(device_id: str, command: str, username: Optional[str] = None) 
     try:
         # Prefer SSH key authentication, fallback to password if needed
         ssh_cmd = get_ssh_command(ip, username, command, device_id, use_password=False)
-        
+
         # Add port if not default
         if ssh_port != 22:
             # Insert port option before username@ip
             port_idx = ssh_cmd.index(f"{username}@{ip}")
             ssh_cmd.insert(port_idx, "-p")
             ssh_cmd.insert(port_idx + 1, str(ssh_port))
-        
+
         result = subprocess.run(
             ssh_cmd,
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=30
         )
@@ -208,6 +208,6 @@ def ssh_to_device(device_id: str, command: str, username: Optional[str] = None) 
         return {
             "success": False,
             "device_id": device_id,
-            "error": f"SSH execution failed: {str(e)}"
+            "error": f"SSH execution failed: {e!s}"
         }
 

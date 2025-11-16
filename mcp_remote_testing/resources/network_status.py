@@ -21,12 +21,12 @@ def get_network_status() -> Dict[str, Any]:
     try:
         route_result = subprocess.run(
             ["ip", "route", "show"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=5
         )
         if route_result.returncode == 0:
-            network_info["routes"] = route_result.stdout.split('\n')[:10]  # First 10 routes
+            network_info["routes"] = route_result.stdout.split("\n")[:10]  # First 10 routes
     except Exception:
         pass
 

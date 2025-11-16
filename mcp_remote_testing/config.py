@@ -32,7 +32,7 @@ def get_vpn_config() -> Optional[Path]:
     """Get path to VPN configuration file"""
     if VPN_CONFIG.exists():
         return VPN_CONFIG
-    elif VPN_CONFIG_ALT.exists():
+    if VPN_CONFIG_ALT.exists():
         return VPN_CONFIG_ALT
     return None
 

@@ -8,21 +8,20 @@ Copyright (C) 2025 Dynamic Devices Ltd
 License: GPL-3.0-or-later
 """
 
-import json
 import sys
-from pathlib import Path
+
 
 def test_imports():
     """Test that all modules can be imported"""
     print("Testing imports...")
     try:
         from mcp_remote_testing.config import validate_config
-        from mcp_remote_testing.tools.device_manager import list_devices, test_device
-        from mcp_remote_testing.tools.vpn_manager import get_vpn_status
-        from mcp_remote_testing.tools.power_monitor import get_power_logs
-        from mcp_remote_testing.tools.tasmota_control import list_tasmota_devices
         from mcp_remote_testing.resources.device_inventory import get_device_inventory
         from mcp_remote_testing.resources.network_status import get_network_status
+        from mcp_remote_testing.tools.device_manager import list_devices, test_device
+        from mcp_remote_testing.tools.power_monitor import get_power_logs
+        from mcp_remote_testing.tools.tasmota_control import list_tasmota_devices
+        from mcp_remote_testing.tools.vpn_manager import get_vpn_status
         print("✓ All imports successful")
         return True
     except ImportError as e:
@@ -33,17 +32,16 @@ def test_config():
     """Test configuration validation"""
     print("\nTesting configuration...")
     try:
-        from mcp_remote_testing.config import validate_config, get_lab_devices_config
+        from mcp_remote_testing.config import get_lab_devices_config, validate_config
         is_valid, errors = validate_config()
         if is_valid:
             print("✓ Configuration valid")
             print(f"  Lab devices config: {get_lab_devices_config()}")
             return True
-        else:
-            print("✗ Configuration invalid:")
-            for error in errors:
-                print(f"  - {error}")
-            return False
+        print("✗ Configuration invalid:")
+        for error in errors:
+            print(f"  - {error}")
+        return False
     except Exception as e:
         print(f"✗ Configuration test failed: {e}")
         return False
@@ -61,23 +59,23 @@ def test_tools():
     except Exception as e:
         print(f"✗ list_devices failed: {e}")
         return False
-    
+
     # Test VPN status
     try:
         from mcp_remote_testing.tools.vpn_manager import get_vpn_status
         result = get_vpn_status()
-        connected = result.get('connected', False)
+        connected = result.get("connected", False)
         print(f"✓ vpn_status: VPN {'connected' if connected else 'disconnected'}")
     except Exception as e:
         print(f"✗ vpn_status failed: {e}")
         return False
-    
+
     # Test Tasmota list
     try:
         from mcp_remote_testing.tools.tasmota_control import list_tasmota_devices
         result = list_tasmota_devices()
-        if result.get('success'):
-            count = result.get('count', 0)
+        if result.get("success"):
+            count = result.get("count", 0)
             print(f"✓ list_tasmota_devices: Found {count} Tasmota devices")
         else:
             print(f"⚠ list_tasmota_devices: {result.get('error', 'Unknown error')}")
@@ -94,19 +92,19 @@ def test_resources():
     try:
         from mcp_remote_testing.resources.device_inventory import get_device_inventory
         inventory = get_device_inventory()
-        if 'error' in inventory:
+        if "error" in inventory:
             print(f"⚠ device_inventory: {inventory['error']}")
         else:
-            device_count = len(inventory.get('devices', {}))
+            device_count = len(inventory.get("devices", {}))
             print(f"✓ device_inventory: Loaded {device_count} devices")
     except Exception as e:
         print(f"✗ device_inventory failed: {e}")
         return False
-    
+
     try:
         from mcp_remote_testing.resources.network_status import get_network_status
         status = get_network_status()
-        print(f"✓ network_status: Status retrieved")
+        print("✓ network_status: Status retrieved")
     except Exception as e:
         print(f"✗ network_status failed: {e}")
         return False
@@ -120,14 +118,14 @@ def test_mcp_sdk():
     try:
         from mcp.server import Server
         from mcp.server.stdio import stdio_server
-        from mcp.types import Tool, TextContent, EmbeddedResource
+        from mcp.types import EmbeddedResource, TextContent, Tool
         print("✓ MCP SDK imports successful (standard structure)")
         return True
     except ImportError:
         try:
             from mcp import Server
             from mcp.stdio import stdio_server
-            from mcp.types import Tool, TextContent, EmbeddedResource
+            from mcp.types import EmbeddedResource, TextContent, Tool
             print("✓ MCP SDK imports successful (alternative structure)")
             return True
         except ImportError:
@@ -164,9 +162,8 @@ def main():
     if all_passed:
         print("All tests passed! Server is ready for integration.")
         return 0
-    else:
-        print("Some tests failed. Please fix issues before integrating.")
-        return 1
+    print("Some tests failed. Please fix issues before integrating.")
+    return 1
 
 if __name__ == "__main__":
     sys.exit(main())

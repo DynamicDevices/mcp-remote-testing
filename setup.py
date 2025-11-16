@@ -2,7 +2,7 @@
 Setup script for Lab Testing MCP Server
 """
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 # Read version from version module
 try:

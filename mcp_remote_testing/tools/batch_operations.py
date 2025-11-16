@@ -12,10 +12,10 @@ from mcp_remote_testing.config import get_lab_devices_config
 def get_device_groups() -> Dict[str, List[str]]:
     """Get devices organized by groups/tags"""
     try:
-        with open(get_lab_devices_config(), 'r') as f:
+        with open(get_lab_devices_config()) as f:
             config = json.load(f)
             devices = config.get("devices", {})
-            
+
             groups = {}
             for device_id, device_info in devices.items():
                 # Group by device type
@@ -23,7 +23,7 @@ def get_device_groups() -> Dict[str, List[str]]:
                 if device_type not in groups:
                     groups[device_type] = []
                 groups[device_type].append(device_id)
-                
+
                 # Group by tags if present
                 tags = device_info.get("tags", [])
                 for tag in tags:
@@ -31,10 +31,10 @@ def get_device_groups() -> Dict[str, List[str]]:
                         groups[tag] = []
                     if device_id not in groups[tag]:
                         groups[tag].append(device_id)
-            
+
             return groups
     except Exception as e:
-        return {"error": f"Failed to get device groups: {str(e)}"}
+        return {"error": f"Failed to get device groups: {e!s}"}
 
 
 def batch_operation(
@@ -54,7 +54,7 @@ def batch_operation(
         Results for each device
     """
     results = {}
-    
+
     for device_id in device_ids:
         try:
             if operation == "test":
@@ -77,12 +77,12 @@ def batch_operation(
             else:
                 results[device_id] = {"error": f"Unknown operation: {operation}"}
         except Exception as e:
-            results[device_id] = {"error": f"Operation failed: {str(e)}"}
-    
+            results[device_id] = {"error": f"Operation failed: {e!s}"}
+
     # Summary
     success_count = sum(1 for r in results.values() if r.get("success") or "error" not in str(r))
     total_count = len(device_ids)
-    
+
     return {
         "operation": operation,
         "total_devices": total_count,
@@ -118,7 +118,7 @@ def regression_test(
             return {"error": f"Device group '{device_group}' not found"}
     else:
         return {"error": "Must specify either device_group or device_ids"}
-    
+
     # Default test sequence
     if not test_sequence:
         test_sequence = [
@@ -126,19 +126,19 @@ def regression_test(
             "system_status",  # System health
             "ota_check"  # OTA status
         ]
-    
+
     # Run test sequence
     all_results = {}
     for test_op in test_sequence:
-        result = batch_operation(target_devices, test_op, **{})
+        result = batch_operation(target_devices, test_op)
         all_results[test_op] = result
-    
+
     # Overall summary
     total_tests = len(test_sequence) * len(target_devices)
     successful_tests = sum(
         r.get("successful", 0) for r in all_results.values()
     )
-    
+
     return {
         "device_group": device_group,
         "device_ids": target_devices,

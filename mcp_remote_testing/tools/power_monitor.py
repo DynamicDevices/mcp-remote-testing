@@ -7,7 +7,7 @@ import subprocess
 import sys
 from typing import Any, Dict, Optional
 
-from mcp_remote_testing.config import get_lab_devices_config, get_scripts_dir, get_logs_dir
+from mcp_remote_testing.config import get_lab_devices_config, get_logs_dir, get_scripts_dir
 
 
 def start_power_monitoring(
@@ -44,7 +44,7 @@ def start_power_monitoring(
     if device_id:
         # Load device config to get DMM IP
         try:
-            with open(get_lab_devices_config(), 'r') as f:
+            with open(get_lab_devices_config()) as f:
                 config = json.load(f)
                 devices = config.get("devices", {})
                 if device_id in devices:
@@ -76,7 +76,7 @@ def start_power_monitoring(
     except Exception as e:
         return {
             "success": False,
-            "error": f"Failed to start power monitoring: {str(e)}"
+            "error": f"Failed to start power monitoring: {e!s}"
         }
 
 

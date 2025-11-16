@@ -10,7 +10,6 @@ import os
 import subprocess
 from pathlib import Path
 from typing import Dict, Optional
-from getpass import getpass
 
 # Credential cache location (user-specific, not in repo)
 CREDENTIAL_CACHE_DIR = Path.home() / ".cache" / "mcp-remote-testing"
@@ -27,27 +26,27 @@ def ensure_cache_dir():
 def load_credentials() -> Dict[str, Dict[str, str]]:
     """Load cached credentials from user's home directory"""
     ensure_cache_dir()
-    
+
     if not CREDENTIAL_CACHE_FILE.exists():
         return {}
-    
+
     try:
-        with open(CREDENTIAL_CACHE_FILE, 'r') as f:
+        with open(CREDENTIAL_CACHE_FILE) as f:
             return json.load(f)
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
 def save_credentials(credentials: Dict[str, Dict[str, str]]):
     """Save credentials to cache (user's home directory, not in repo)"""
     ensure_cache_dir()
-    
+
     # Set restrictive permissions before writing
     CREDENTIAL_CACHE_FILE.touch(mode=0o600)
-    
-    with open(CREDENTIAL_CACHE_FILE, 'w') as f:
+
+    with open(CREDENTIAL_CACHE_FILE, "w") as f:
         json.dump(credentials, f, indent=2)
-    
+
     # Ensure file permissions are restrictive
     os.chmod(CREDENTIAL_CACHE_FILE, 0o600)
 
@@ -103,7 +102,7 @@ def check_ssh_key_installed(device_ip: str, username: str) -> bool:
             ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
              "-o", "StrictHostKeyChecking=no",
              f"{username}@{device_ip}", "echo OK"],
-            capture_output=True,
+            check=False, capture_output=True,
             timeout=10
         )
         return result.returncode == 0
@@ -127,22 +126,22 @@ def install_ssh_key(device_ip: str, username: str, password: Optional[str] = Non
     # Check if key already works
     if check_ssh_key_installed(device_ip, username):
         return True
-    
+
     # Get default SSH public key
     ssh_key_path = Path.home() / ".ssh" / "id_rsa.pub"
     if not ssh_key_path.exists():
         ssh_key_path = Path.home() / ".ssh" / "id_ed25519.pub"
-    
+
     if not ssh_key_path.exists():
         return False
-    
+
     # Read public key
     try:
-        with open(ssh_key_path, 'r') as f:
+        with open(ssh_key_path) as f:
             public_key = f.read().strip()
-    except IOError:
+    except OSError:
         return False
-    
+
     # Install key using sshpass if password provided, otherwise prompt
     if password:
         cmd = [
@@ -158,15 +157,15 @@ def install_ssh_key(device_ip: str, username: str, password: Optional[str] = Non
             f"{username}@{device_ip}",
             f"mkdir -p ~/.ssh && echo '{public_key}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
         ]
-    
+
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=30)
+        result = subprocess.run(cmd, check=False, capture_output=True, timeout=30)
         if result.returncode == 0:
             # Verify it works
             return check_ssh_key_installed(device_ip, username)
     except Exception:
         pass
-    
+
     return False
 
 
@@ -183,21 +182,21 @@ def enable_passwordless_sudo(device_ip: str, username: str, password: Optional[s
         True if passwordless sudo was enabled
     """
     sudo_config = f"{username} ALL=(ALL) NOPASSWD: ALL"
-    
+
     # Check if already configured
     check_cmd = [
         "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
         f"{username}@{device_ip}",
         f"sudo grep -q '{sudo_config}' /etc/sudoers.d/{username} 2>/dev/null && echo OK"
     ]
-    
+
     try:
-        result = subprocess.run(check_cmd, capture_output=True, timeout=10)
+        result = subprocess.run(check_cmd, check=False, capture_output=True, timeout=10)
         if result.returncode == 0 and b"OK" in result.stdout:
             return True
     except Exception:
         pass
-    
+
     # Install passwordless sudo config using sshpass if password provided
     if password:
         # Check if sshpass is available
@@ -222,15 +221,15 @@ def enable_passwordless_sudo(device_ip: str, username: str, password: Optional[s
             f"{username}@{device_ip}",
             f"echo '{sudo_config}' | sudo tee /etc/sudoers.d/{username} && sudo chmod 440 /etc/sudoers.d/{username}"
         ]
-    
+
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=30)
+        result = subprocess.run(cmd, check=False, capture_output=True, timeout=30)
         return result.returncode == 0
     except Exception:
         return False
 
 
-def get_ssh_command(device_ip: str, username: str, command: str, 
+def get_ssh_command(device_ip: str, username: str, command: str,
                    device_id: Optional[str] = None, use_password: bool = False) -> list:
     """
     Build SSH command with appropriate authentication method.
@@ -254,7 +253,7 @@ def get_ssh_command(device_ip: str, username: str, command: str,
             f"{username}@{device_ip}",
             command
         ]
-    
+
     # Fall back to password if needed
     if use_password and device_id:
         cred = get_credential(device_id, "ssh")
@@ -266,7 +265,7 @@ def get_ssh_command(device_ip: str, username: str, command: str,
                 f"{username}@{device_ip}",
                 command
             ]
-    
+
     # Default: try key-based (may prompt for password)
     return [
         "ssh", "-o", "ConnectTimeout=10",

@@ -37,7 +37,7 @@ def tasmota_control(
 
     # Load device config to verify device exists
     try:
-        with open(get_lab_devices_config(), 'r') as f:
+        with open(get_lab_devices_config()) as f:
             config = json.load(f)
             devices = config.get("devices", {})
 
@@ -56,7 +56,7 @@ def tasmota_control(
     except Exception as e:
         return {
             "success": False,
-            "error": f"Failed to load device configuration: {str(e)}"
+            "error": f"Failed to load device configuration: {e!s}"
         }
 
     # Build command based on action
@@ -82,7 +82,7 @@ def tasmota_control(
     try:
         result = subprocess.run(
             cmd,
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=10
         )
@@ -123,7 +123,7 @@ def tasmota_control(
         return {
             "success": False,
             "device_id": device_id,
-            "error": f"Command execution failed: {str(e)}"
+            "error": f"Command execution failed: {e!s}"
         }
 
 
@@ -135,7 +135,7 @@ def list_tasmota_devices() -> Dict[str, Any]:
         Dictionary with Tasmota device list
     """
     try:
-        with open(get_lab_devices_config(), 'r') as f:
+        with open(get_lab_devices_config()) as f:
             config = json.load(f)
             devices = config.get("devices", {})
 
@@ -160,6 +160,6 @@ def list_tasmota_devices() -> Dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error": f"Failed to load Tasmota devices: {str(e)}"
+            "error": f"Failed to load Tasmota devices: {e!s}"
         }
 

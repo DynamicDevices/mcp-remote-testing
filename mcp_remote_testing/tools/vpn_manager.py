@@ -3,7 +3,7 @@ VPN Management Tools for MCP Server
 """
 
 import subprocess
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from mcp_remote_testing.config import get_vpn_config
 
@@ -19,7 +19,7 @@ def get_vpn_status() -> Dict[str, Any]:
         # Check for active WireGuard interfaces
         result = subprocess.run(
             ["wg", "show"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=5
         )
@@ -28,9 +28,9 @@ def get_vpn_status() -> Dict[str, Any]:
         if result.returncode == 0 and result.stdout.strip():
             # Parse wg show output
             current_interface = None
-            for line in result.stdout.split('\n'):
-                if line.startswith('interface:'):
-                    current_interface = line.split(':')[1].strip()
+            for line in result.stdout.split("\n"):
+                if line.startswith("interface:"):
+                    current_interface = line.split(":")[1].strip()
                     interfaces.append({
                         "name": current_interface,
                         "status": "active"
@@ -39,16 +39,16 @@ def get_vpn_status() -> Dict[str, Any]:
         # Check NetworkManager connections
         nm_result = subprocess.run(
             ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE,STATE", "connection", "show", "--active"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=5
         )
 
         nm_connections = []
         if nm_result.returncode == 0:
-            for line in nm_result.stdout.strip().split('\n'):
-                if line and 'wireguard' in line.lower():
-                    parts = line.split(':')
+            for line in nm_result.stdout.strip().split("\n"):
+                if line and "wireguard" in line.lower():
+                    parts = line.split(":")
                     if len(parts) >= 4:
                         nm_connections.append({
                             "name": parts[0],
@@ -75,7 +75,7 @@ def get_vpn_status() -> Dict[str, Any]:
     except Exception as e:
         return {
             "connected": False,
-            "error": f"Failed to check VPN status: {str(e)}"
+            "error": f"Failed to check VPN status: {e!s}"
         }
 
 
@@ -101,7 +101,7 @@ def connect_vpn() -> Dict[str, Any]:
         # Try using NetworkManager first (doesn't require root for user connections)
         nm_result = subprocess.run(
             ["nmcli", "connection", "up", "wg0-lab-only"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=10
         )
@@ -116,7 +116,7 @@ def connect_vpn() -> Dict[str, Any]:
         # Fallback: Try wg-quick (requires root)
         wg_result = subprocess.run(
             ["sudo", "wg-quick", "up", str(vpn_config)],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=10
         )
@@ -127,12 +127,11 @@ def connect_vpn() -> Dict[str, Any]:
                 "method": "wg-quick",
                 "message": "VPN connected via wg-quick"
             }
-        else:
-            return {
-                "success": False,
-                "error": f"Failed to connect VPN: {wg_result.stderr}",
-                "nm_error": nm_result.stderr
-            }
+        return {
+            "success": False,
+            "error": f"Failed to connect VPN: {wg_result.stderr}",
+            "nm_error": nm_result.stderr
+        }
 
     except subprocess.TimeoutExpired:
         return {
@@ -142,7 +141,7 @@ def connect_vpn() -> Dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error": f"VPN connection failed: {str(e)}"
+            "error": f"VPN connection failed: {e!s}"
         }
 
 
@@ -157,7 +156,7 @@ def disconnect_vpn() -> Dict[str, Any]:
         # Try NetworkManager first
         nm_result = subprocess.run(
             ["nmcli", "connection", "down", "wg0-lab-only"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=10
         )
@@ -172,19 +171,19 @@ def disconnect_vpn() -> Dict[str, Any]:
         # Try to find and disconnect any WireGuard interfaces
         wg_result = subprocess.run(
             ["wg", "show", "all", "dump"],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=5
         )
 
         if wg_result.returncode == 0 and wg_result.stdout.strip():
             # Find interface name from first line
-            first_line = wg_result.stdout.split('\n')[0]
+            first_line = wg_result.stdout.split("\n")[0]
             if first_line:
-                interface_name = first_line.split('\t')[0]
+                interface_name = first_line.split("\t")[0]
                 down_result = subprocess.run(
                     ["sudo", "wg-quick", "down", interface_name],
-                    capture_output=True,
+                    check=False, capture_output=True,
                     text=True,
                     timeout=10
                 )
@@ -205,6 +204,6 @@ def disconnect_vpn() -> Dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error": f"Failed to disconnect VPN: {str(e)}"
+            "error": f"Failed to disconnect VPN: {e!s}"
         }
 
