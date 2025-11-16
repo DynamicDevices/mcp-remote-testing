@@ -8,5 +8,6 @@ matplotlib>=3.5.0
 numpy>=1.21.0
 
 # SSH and credential management
-sshpass>=1.0.0  # For password-based SSH when keys not available
+# Note: sshpass is a system package, not a Python package
+# Install with: sudo apt install sshpass (or equivalent for your OS)
 

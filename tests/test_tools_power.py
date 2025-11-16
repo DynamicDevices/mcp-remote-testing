@@ -117,16 +117,16 @@ class TestTasmotaPowerMonitoring:
             "success": True,
             "result": {"Energy": {"Total": 1.5, "Today": 0.1, "Power": 5.2}}
         }
-        
+
         devices = {
             "tasmota_switch_1": {
                 "device_type": "tasmota_device",
                 "name": "Power Switch 1"
             }
         }
-        
+
         result = _start_tasmota_power_monitoring("tasmota_switch_1", "test", 300, devices)
-        
+
         assert result["success"] is True
         assert result["monitor_type"] == "tasmota"
         assert result["device_id"] == "tasmota_switch_1"
@@ -159,15 +159,15 @@ class TestTasmotaPowerMonitoring:
             "success": False,
             "error": "Energy monitoring not available"
         }
-        
+
         devices = {
             "tasmota_switch_1": {
                 "device_type": "tasmota_device"
             }
         }
-        
+
         result = _start_tasmota_power_monitoring("tasmota_switch_1", "test", 300, devices)
-        
+
         assert result["success"] is False
         assert "energy monitoring" in result["error"].lower()
 

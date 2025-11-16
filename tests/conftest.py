@@ -12,6 +12,14 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 
+def pytest_collection_modifyitems(config, items):
+    """Modify test collection to exclude test_device function from device_manager"""
+    items[:] = [
+        item for item in items
+        if not (hasattr(item, 'nodeid') and ('device_manager.py::test_device' in item.nodeid or 'test_device_func' in item.nodeid))
+    ]
+
+
 @pytest.fixture
 def temp_config_dir(tmp_path: Path) -> Path:
     """Create temporary config directory"""

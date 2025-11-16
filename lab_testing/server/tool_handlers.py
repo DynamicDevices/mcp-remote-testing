@@ -9,6 +9,9 @@ License: GPL-3.0-or-later
 """
 
 import json
+
+# Import record_tool_call from server.py (defined there)
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -75,9 +78,6 @@ from lab_testing.utils.error_helper import (
 )
 from lab_testing.utils.logger import get_logger, log_tool_result
 
-# Import record_tool_call from server.py (defined there)
-import sys
-from pathlib import Path
 _server_py = Path(__file__).parent.parent / "server.py"
 if _server_py.exists():
     import importlib.util

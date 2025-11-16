@@ -67,16 +67,15 @@ class TestVerifyDeviceIdentity:
     @patch("lab_testing.tools.device_verification.resolve_device_identifier")
     def test_verify_identity_match(self, mock_resolve, mock_ssh, mock_config, sample_device_config):
         """Test verifying device identity when it matches"""
-        from lab_testing.tools.device_verification import verify_device_identity
         mock_resolve.return_value = "test_device_1"
         mock_config.return_value = sample_device_config
         mock_ssh.return_value = {
             "success": True,
             "stdout": "test-board-1"
         }
-        
+
         result = verify_device_identity("test_device_1", "192.168.1.100")
-        
+
         assert result.get("verified") is True or result.get("success") is True
         assert result.get("device_id") == "test_device_1"
 
@@ -85,16 +84,15 @@ class TestVerifyDeviceIdentity:
     @patch("lab_testing.tools.device_verification.resolve_device_identifier")
     def test_verify_identity_mismatch(self, mock_resolve, mock_ssh, mock_config, sample_device_config):
         """Test verifying device identity when it doesn't match"""
-        from lab_testing.tools.device_verification import verify_device_identity
         mock_resolve.return_value = "test_device_1"
         mock_config.return_value = sample_device_config
         mock_ssh.return_value = {
             "success": True,
             "stdout": "different-board"
         }
-        
+
         result = verify_device_identity("test_device_1", "192.168.1.100")
-        
+
         # Should fail verification due to hostname mismatch
         # The function returns success=True but verified=False when hostname doesn't match
         # Note: The matching logic is flexible (checks if device_id is in hostname), so we need to ensure

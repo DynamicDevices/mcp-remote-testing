@@ -12,7 +12,7 @@ from lab_testing.tools.device_manager import (
     list_devices,
     resolve_device_identifier,
     ssh_to_device,
-    test_device,
+    test_device as test_device_func,  # Rename to avoid pytest collection
 )
 
 
@@ -55,7 +55,7 @@ class TestTestDevice:
 
         mock_run.side_effect = [mock_ping, mock_ssh]
 
-        result = test_device("test_device_1")
+        result = test_device_func("test_device_1")
 
         assert result["device_id"] == "test_device_1"
         assert result.get("ping_reachable") or result.get("ping", {}).get("success")
