@@ -2,7 +2,7 @@
 
 ## Credential Management
 
-**No secrets in repository**: Credentials are cached in `~/.cache/lab-testing/credentials.json` (user's home directory, not in repo).
+**No secrets in repository**: Credentials are cached in `~/.cache/ai-lab-testing/credentials.json` (user's home directory, not in repo).
 
 ### Authentication Preferences
 
@@ -22,7 +22,7 @@
 
 ### Credential Cache
 
-- Location: `~/.cache/lab-testing/credentials.json`
+- Location: `~/.cache/ai-lab-testing/credentials.json`
 - Permissions: 600 (read/write owner only)
 - Format: JSON with device_id:credential_type keys
 - Never committed to repository
@@ -33,5 +33,5 @@
 - Enable passwordless sudo for debugging convenience
 - Use password caching only when keys unavailable
 - Regularly rotate credentials if passwords used
-- Review credential cache: `~/.cache/lab-testing/credentials.json`
+- Review credential cache: `~/.cache/ai-lab-testing/credentials.json`
 

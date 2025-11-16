@@ -55,7 +55,7 @@ class TestCredentialCache:
         mock_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: mock_home)
 
-        cache_file = mock_home / ".cache" / "lab-testing" / "credentials.json"
+        cache_file = mock_home / ".cache" / "ai-lab-testing" / "credentials.json"
         # Ensure parent exists but file doesn't
         cache_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -71,7 +71,7 @@ class TestCredentialCache:
         mock_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: mock_home)
 
-        cache_file = mock_home / ".cache" / "lab-testing" / "credentials.json"
+        cache_file = mock_home / ".cache" / "ai-lab-testing" / "credentials.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
 
         test_creds = {
@@ -91,7 +91,7 @@ class TestCredentialCache:
         mock_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: mock_home)
 
-        cache_file = mock_home / ".cache" / "lab-testing" / "credentials.json"
+        cache_file = mock_home / ".cache" / "ai-lab-testing" / "credentials.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         cache_file.write_text("invalid json{")
 
@@ -106,7 +106,7 @@ class TestCredentialCache:
         mock_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: mock_home)
 
-        cache_file = mock_home / ".cache" / "lab-testing" / "credentials.json"
+        cache_file = mock_home / ".cache" / "ai-lab-testing" / "credentials.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
 
         test_creds = {"device1:ssh": {"username": "root", "password": "secret"}}
@@ -126,7 +126,7 @@ class TestCredentialCache:
         mock_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: mock_home)
 
-        cache_file = mock_home / ".cache" / "lab-testing" / "credentials.json"
+        cache_file = mock_home / ".cache" / "ai-lab-testing" / "credentials.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
 
         test_creds = {"device1:ssh": {"username": "root", "password": "secret"}}
@@ -143,7 +143,7 @@ class TestCredentialCache:
         mock_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: mock_home)
 
-        cache_file = mock_home / ".cache" / "lab-testing" / "credentials.json"
+        cache_file = mock_home / ".cache" / "ai-lab-testing" / "credentials.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         cache_file.write_text("{}")
 
@@ -158,7 +158,7 @@ class TestCredentialCache:
         mock_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: mock_home)
 
-        cache_file = mock_home / ".cache" / "lab-testing" / "credentials.json"
+        cache_file = mock_home / ".cache" / "ai-lab-testing" / "credentials.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
 
         with patch("lab_testing.utils.credentials.CREDENTIAL_CACHE_FILE", cache_file):

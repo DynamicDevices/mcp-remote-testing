@@ -1,6 +1,6 @@
 # Lab Testing MCP Server
 
-[![Tests](https://github.com/DynamicDevices/mcp-remote-testing/actions/workflows/tests.yml/badge.svg)](https://github.com/DynamicDevices/mcp-remote-testing/actions/workflows/tests.yml)
+[![Tests](https://github.com/DynamicDevices/ai-lab-testing/actions/workflows/tests.yml/badge.svg)](https://github.com/DynamicDevices/ai-lab-testing/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
@@ -19,18 +19,18 @@ MCP server exposing remote embedded hardware testing capabilities to AI assistan
 
 ```bash
 # Install from PyPI
-python3.10 -m pip install lab-testing
+python3.10 -m pip install ai-lab-testing
 
 # Or with development dependencies
-python3.10 -m pip install "lab-testing[dev]"
+python3.10 -m pip install "ai-lab-testing[dev]"
 ```
 
 ### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/DynamicDevices/mcp-remote-testing.git
-cd mcp-remote-testing
+git clone https://github.com/DynamicDevices/ai-lab-testing.git
+cd ai-lab-testing
 
 # Install in development mode
 python3.10 -m pip install -e ".[dev]"
@@ -46,11 +46,11 @@ Add to Cursor MCP config (`~/.cursor/mcp.json`):
 ```json
 {
   "mcpServers": {
-    "lab-testing": {
+    "ai-lab-testing": {
       "command": "python3.10",
-      "args": ["/path/to/lab-testing/lab_testing/server.py"],
+      "args": ["/path/to/ai-lab-testing/lab_testing/server.py"],
       "env": {
-        "LAB_TESTING_ROOT": "/path/to/lab-testing",
+        "LAB_TESTING_ROOT": "/path/to/ai-lab-testing",
         "VPN_CONFIG_PATH": "/path/to/wg0.conf"
       }
     }

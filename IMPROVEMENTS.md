@@ -7,7 +7,7 @@
 **Improvement**: 
 - Add structured logging (Python `logging` module)
 - Log levels: DEBUG, INFO, WARNING, ERROR
-- Log to file (`~/.cache/lab-testing/logs/`) and optionally stderr
+- Log to file (`~/.cache/ai-lab-testing/logs/`) and optionally stderr
 - Include request IDs for tracing
 - Add metrics: tool call counts, success/failure rates, execution times
 

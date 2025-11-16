@@ -14,7 +14,7 @@ if ! gh auth status &> /dev/null; then
     exit 1
 fi
 
-REPO="DynamicDevices/lab-testing"
+REPO="DynamicDevices/ai-lab-testing"
 
 echo "Setting up repository metadata for $REPO..."
 
@@ -22,7 +22,7 @@ echo "Setting up repository metadata for $REPO..."
 gh repo edit "$REPO" --description "MCP server for remote embedded hardware testing" || true
 
 # Set repository topics
-gh repo edit "$REPO" --add-topic "mcp" --add-topic "model-context-protocol" --add-topic "embedded-hardware" --add-topic "lab-testing" --add-topic "python" || true
+gh repo edit "$REPO" --add-topic "mcp" --add-topic "model-context-protocol" --add-topic "embedded-hardware" --add-topic "ai-lab-testing" --add-topic "python" || true
 
 # Set visibility (if needed)
 # gh repo edit "$REPO" --visibility private

@@ -25,7 +25,7 @@ Uses existing lab testing framework:
 
 ### Environment Variables
 
-- `LAB_TESTING_ROOT`: Path to lab testing framework (default: `/data_drive/esl/lab-testing`)
+- `LAB_TESTING_ROOT`: Path to lab testing framework (default: `/data_drive/esl/ai-lab-testing`)
 - `VPN_CONFIG_PATH`: Path to WireGuard config file (optional, auto-detected if not set)
 
 ### VPN Configuration
@@ -48,10 +48,10 @@ Add to `~/.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "lab-testing": {
+    "ai-lab-testing": {
       "command": "python3.10",
       "args": ["/absolute/path/to/lab_testing/server.py"],
-      "env": {"LAB_TESTING_ROOT": "/data_drive/esl/lab-testing"}
+      "env": {"LAB_TESTING_ROOT": "/data_drive/esl/ai-lab-testing"}
     }
   }
 }

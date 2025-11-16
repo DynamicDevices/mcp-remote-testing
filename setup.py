@@ -11,7 +11,7 @@ except ImportError:
     __version__ = "0.1.0"
 
 setup(
-    name="lab-testing",
+    name="ai-lab-testing",
     version=__version__,
     description="MCP server for remote embedded hardware testing",
     author="Alex J Lennon",

@@ -24,7 +24,7 @@ def setup_logger(name: str = "lab_testing") -> logging.Logger:
     logger.setLevel(logging.DEBUG)
     
     # File handler
-    log_dir = Path.home() / ".cache" / "lab-testing" / "logs"
+    log_dir = Path.home() / ".cache" / "ai-lab-testing" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(log_dir / "server.log")
     file_handler.setLevel(logging.DEBUG)

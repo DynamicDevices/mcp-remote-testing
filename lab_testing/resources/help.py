@@ -73,7 +73,7 @@ def get_help_content() -> Dict[str, Any]:
             "health://status": "Server health, metrics, SSH pool status, and uptime",
         },
         "configuration": {
-            "lab_testing_root": "Path to lab testing framework (default: /data_drive/esl/lab-testing)",
+            "lab_testing_root": "Path to lab testing framework (default: /data_drive/esl/ai-lab-testing)",
             "device_config": "Device inventory: {lab_testing_root}/config/lab_devices.json",
             "vpn_config": "VPN config: {lab_testing_root}/secrets/wg0.conf",
             "environment": "Override with LAB_TESTING_ROOT environment variable",

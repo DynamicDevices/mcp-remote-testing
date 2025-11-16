@@ -3,7 +3,7 @@
 
 set -e
 
-REPO="DynamicDevices/lab-testing"
+REPO="DynamicDevices/ai-lab-testing"
 
 echo "Initializing repository..."
 

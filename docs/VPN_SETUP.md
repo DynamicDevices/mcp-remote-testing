@@ -28,11 +28,11 @@ Or in Cursor MCP config:
 ```json
 {
   "mcpServers": {
-    "lab-testing": {
+    "ai-lab-testing": {
       "command": "python3.10",
       "args": ["/path/to/lab_testing/server.py"],
       "env": {
-        "LAB_TESTING_ROOT": "/path/to/lab-testing",
+        "LAB_TESTING_ROOT": "/path/to/ai-lab-testing",
         "VPN_CONFIG_PATH": "/path/to/your/wg0.conf"
       }
     }
@@ -304,5 +304,5 @@ AllowedIPs = 192.168.2.0/24
 
 - Use MCP tool: `vpn_setup_instructions` for detailed help
 - Check WireGuard documentation: https://www.wireguard.com/
-- Check server logs: `~/.cache/lab-testing/logs/`
+- Check server logs: `~/.cache/ai-lab-testing/logs/`
 

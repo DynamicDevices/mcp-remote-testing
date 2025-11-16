@@ -1,6 +1,6 @@
 # Publishing Guide
 
-This guide explains how to package and publish `lab-testing` to PyPI.
+This guide explains how to package and publish `ai-lab-testing` to PyPI.
 
 ## ⚠️ Alpha Quality Notice
 
@@ -35,15 +35,15 @@ Generate API tokens (recommended over passwords):
 **Test PyPI:**
 1. Go to https://test.pypi.org/manage/account/token/
 2. Click "Add API token"
-3. Name it (e.g., "lab-testing-testpypi")
-4. Scope: "Entire account" (or "Project: lab-testing" if you prefer)
+3. Name it (e.g., "ai-lab-testing-testpypi")
+4. Scope: "Entire account" (or "Project: ai-lab-testing" if you prefer)
 5. Copy the token (starts with `pypi-`)
 
 **Production PyPI:**
 1. Go to https://pypi.org/manage/account/token/
 2. Click "Add API token"
-3. Name it (e.g., "lab-testing-pypi")
-4. Scope: "Entire account" (or "Project: lab-testing" if you prefer)
+3. Name it (e.g., "ai-lab-testing-pypi")
+4. Scope: "Entire account" (or "Project: ai-lab-testing" if you prefer)
 5. Copy the token (starts with `pypi-`)
 
 **Security**: Store tokens securely. Never commit them to git.
@@ -58,8 +58,8 @@ python3.10 -m pip install --upgrade build twine
 ### 4. Verify Package Name Availability
 
 Before first publish, verify the package name is available:
-- Check https://pypi.org/project/lab-testing/ (should not exist or be yours)
-- Check https://test.pypi.org/project/lab-testing/ (should not exist or be yours)
+- Check https://pypi.org/project/ai-lab-testing/ (should not exist or be yours)
+- Check https://test.pypi.org/project/ai-lab-testing/ (should not exist or be yours)
 
 ## Configuration
 
@@ -121,7 +121,7 @@ make publish-test
 
 Then test installation:
 ```bash
-python3.10 -m pip install --index-url https://test.pypi.org/simple/ lab-testing
+python3.10 -m pip install --index-url https://test.pypi.org/simple/ ai-lab-testing
 ```
 
 ### Publish to Production PyPI
@@ -167,10 +167,10 @@ After publishing, users can install:
 
 ```bash
 # From PyPI
-python3.10 -m pip install lab-testing
+python3.10 -m pip install ai-lab-testing
 
 # With dev dependencies
-python3.10 -m pip install "lab-testing[dev]"
+python3.10 -m pip install "ai-lab-testing[dev]"
 ```
 
 ## Troubleshooting
@@ -233,7 +233,7 @@ PyPI supports trusted publishing via GitHub Actions. This is more secure than AP
 3. Select "GitHub" as the provider
 4. Enter:
    - Owner: `DynamicDevices`
-   - Repository name: `mcp-remote-testing`
+   - Repository name: `ai-lab-testing`
    - Workflow filename: `.github/workflows/build.yml`
 5. Click "Add"
 

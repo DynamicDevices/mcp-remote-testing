@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 # Default paths - can be overridden via environment variables
-DEFAULT_LAB_TESTING_ROOT = Path("/data_drive/esl/lab-testing")
+DEFAULT_LAB_TESTING_ROOT = Path("/data_drive/esl/ai-lab-testing")
 LAB_TESTING_ROOT = Path(os.getenv("LAB_TESTING_ROOT", DEFAULT_LAB_TESTING_ROOT))
 
 # Configuration file paths
@@ -18,7 +18,7 @@ CONFIG_DIR = LAB_TESTING_ROOT / "config"
 SECRETS_DIR = LAB_TESTING_ROOT / "secrets"
 SCRIPTS_DIR = LAB_TESTING_ROOT / "scripts" / "local"
 LOGS_DIR = LAB_TESTING_ROOT / "logs"
-CACHE_DIR = Path.home() / ".cache" / "lab-testing"
+CACHE_DIR = Path.home() / ".cache" / "ai-lab-testing"
 
 # Key configuration files
 LAB_DEVICES_JSON = CONFIG_DIR / "lab_devices.json"

@@ -52,7 +52,7 @@ def setup_logger(
 
     # File handler (always enabled for debugging)
     if log_to_file:
-        log_dir = Path.home() / ".cache" / "lab-testing" / "logs"
+        log_dir = Path.home() / ".cache" / "ai-lab-testing" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
 
         # Main log file

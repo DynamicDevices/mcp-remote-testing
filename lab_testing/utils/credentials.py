@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 # Credential cache location (user-specific, not in repo)
-CREDENTIAL_CACHE_DIR = Path.home() / ".cache" / "lab-testing"
+CREDENTIAL_CACHE_DIR = Path.home() / ".cache" / "ai-lab-testing"
 CREDENTIAL_CACHE_FILE = CREDENTIAL_CACHE_DIR / "credentials.json"
 
 

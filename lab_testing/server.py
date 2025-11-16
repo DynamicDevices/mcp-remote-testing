@@ -60,7 +60,7 @@ setup_logger()
 logger = get_logger()
 
 # Initialize MCP server
-server = Server("lab-testing-mcp")
+server = Server("ai-lab-testing-mcp")
 
 
 def _record_tool_result(name: str, result: Dict[str, Any], request_id: str, start_time: float):
