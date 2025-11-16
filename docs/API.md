@@ -13,12 +13,18 @@
 - `disconnect_vpn()` - Disconnect from VPN
 
 ### Power Monitoring
-- `start_power_monitoring(device_id?, test_name?, duration?)` - Start monitoring session
+- `start_power_monitoring(device_id?, test_name?, duration?, monitor_type?)` - Start monitoring session
+  - Supports both DMM (Digital Multimeter) and Tasmota devices
+  - `monitor_type`: "dmm" (default) or "tasmota" (auto-detected from device type)
+  - DMM: Direct power measurement via SCPI commands
+  - Tasmota: Power monitoring via Tasmota energy monitoring (requires energy monitoring enabled)
 - `get_power_logs(test_name?, limit=10)` - Get recent logs
+- `tasmota_control(device_id, "energy")` - Get current power consumption from Tasmota device
 
 ### Tasmota Control
 - `tasmota_control(device_id, action)` - Control device (`on`|`off`|`toggle`|`status`|`energy`)
-- `list_tasmota_devices()` - List all Tasmota devices
+- `list_tasmota_devices()` - List all Tasmota devices and devices they control
+- `power_cycle_device(device_id, off_duration=5)` - Power cycle device via mapped Tasmota switch (turns off, waits, turns on)
 
 ### OTA/Container Management
 - `check_ota_status(device_id)` - Check Foundries.io OTA update status
@@ -54,6 +60,12 @@
 ### Change Tracking
 - `get_change_history(device_id, include_reverted?)` - Get change history for security/debugging
 - `revert_changes(device_id, change_id?, force?)` - Revert changes made to device
+
+### Network Mapping & Verification
+- `create_network_map(networks?, scan_networks?, test_configured_devices?, max_hosts_per_network?)` - Create visual map showing device type, uptime, friendly names, power switches
+- `verify_device_identity(device_id, ip?)` - Verify device identity by hostname/unique ID (for DHCP)
+- `verify_device_by_ip(ip, username?, ssh_port?)` - Identify device at IP by checking hostname/unique ID
+- `update_device_ip(device_id, new_ip)` - Verify and update device IP if changed (DHCP)
 
 ### Help
 - `help(topic?)` - Get help documentation (topic: `all`|`tools`|`resources`|`workflows`|`troubleshooting`|`examples`)

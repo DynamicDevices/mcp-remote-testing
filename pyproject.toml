@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mcp-remote-testing"
+name = "lab-testing"
 version = "0.1.0"
 description = "MCP server for remote embedded hardware testing"
 readme = "README.md"

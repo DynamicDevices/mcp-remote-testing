@@ -14,7 +14,7 @@ if ! gh auth status &> /dev/null; then
     exit 1
 fi
 
-REPO="DynamicDevices/mcp-remote-testing"
+REPO="DynamicDevices/lab-testing"
 
 echo "Setting up repository metadata for $REPO..."
 

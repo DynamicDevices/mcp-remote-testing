@@ -8,7 +8,7 @@
 Add logging to all tools for debugging and monitoring.
 
 **Implementation**:
-- Create `mcp_remote_testing/utils/logger.py`
+- Create `lab_testing/utils/logger.py`
 - Configure logging with file and console handlers
 - Add request ID tracking
 - Replace print statements with logger calls
@@ -19,12 +19,12 @@ Add logging to all tools for debugging and monitoring.
 import logging
 from pathlib import Path
 
-def setup_logger(name: str = "mcp_remote_testing") -> logging.Logger:
+def setup_logger(name: str = "lab_testing") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     
     # File handler
-    log_dir = Path.home() / ".cache" / "mcp-remote-testing" / "logs"
+    log_dir = Path.home() / ".cache" / "lab-testing" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(log_dir / "server.log")
     file_handler.setLevel(logging.DEBUG)
@@ -80,7 +80,7 @@ async def batch_operation_async(
 Reuse SSH connections for faster execution.
 
 **Implementation**:
-- Create `mcp_remote_testing/utils/ssh_pool.py`
+- Create `lab_testing/utils/ssh_pool.py`
 - Maintain connection pool per device
 - Auto-reconnect on failure
 - Connection health checks
@@ -102,7 +102,7 @@ Add `health://status` resource for monitoring.
 Custom exceptions for better error handling.
 
 **Implementation**:
-- Create `mcp_remote_testing/exceptions.py`
+- Create `lab_testing/exceptions.py`
 - Define exception hierarchy
 - Add retry logic for transient errors
 

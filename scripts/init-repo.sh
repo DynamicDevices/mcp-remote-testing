@@ -3,7 +3,7 @@
 
 set -e
 
-REPO="DynamicDevices/mcp-remote-testing"
+REPO="DynamicDevices/lab-testing"
 
 echo "Initializing repository..."
 

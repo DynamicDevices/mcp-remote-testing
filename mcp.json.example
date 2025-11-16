@@ -3,7 +3,7 @@
     "lab-testing": {
       "command": "python3.10",
       "args": [
-        "/home/ajlennon/data_drive/esl/mcp-remote-testing/mcp_remote_testing/server.py"
+        "/home/ajlennon/data_drive/esl/mcp-remote-testing/lab_testing/server.py"
       ],
       "env": {
         "LAB_TESTING_ROOT": "/data_drive/esl/lab-testing"

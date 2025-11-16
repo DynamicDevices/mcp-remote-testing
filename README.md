@@ -16,7 +16,7 @@ python3.10 -m pip install git+https://github.com/modelcontextprotocol/python-sdk
 python3.10 -m pip install -e ".[dev]"
 
 # Verify installation
-python3.10 mcp_remote_testing/test_server.py
+python3.10 lab_testing/test_server.py
 ```
 
 ## Configuration
@@ -28,14 +28,23 @@ Add to Cursor MCP config (`~/.cursor/mcp.json`):
   "mcpServers": {
     "lab-testing": {
       "command": "python3.10",
-      "args": ["/home/ajlennon/data_drive/esl/mcp-remote-testing/mcp_remote_testing/server.py"],
-      "env": {"LAB_TESTING_ROOT": "/data_drive/esl/lab-testing"}
+      "args": ["/path/to/lab-testing/lab_testing/server.py"],
+      "env": {
+        "LAB_TESTING_ROOT": "/path/to/lab-testing",
+        "VPN_CONFIG_PATH": "/path/to/wg0.conf"
+      }
     }
   }
 }
 ```
 
 **Important:** Use `python3.10` (or `python3.11+`) since MCP SDK requires Python 3.10+.
+
+### VPN Setup
+
+The server auto-detects WireGuard VPN configs. If you don't have one:
+- See [docs/VPN_SETUP.md](docs/VPN_SETUP.md) for setup guide
+- Use MCP tools: `vpn_setup_instructions`, `create_vpn_config_template`
 
 See [docs/SETUP.md](docs/SETUP.md) for detailed setup instructions or `mcp.json.example` for a template.
 
@@ -77,13 +86,15 @@ Data flow: AI → MCP Server → Tools → Lab Framework → Hardware
 
 - **Device**: `list_devices`, `test_device`, `ssh_to_device`
 - **VPN**: `vpn_status`, `connect_vpn`, `disconnect_vpn`
-- **Power**: `start_power_monitoring`, `get_power_logs`, `analyze_power_logs`, `monitor_low_power`, `compare_power_profiles`
-- **Tasmota**: `tasmota_control`, `list_tasmota_devices`
+- **Power**: `start_power_monitoring` (DMM or Tasmota), `get_power_logs`, `analyze_power_logs`, `monitor_low_power`, `compare_power_profiles` - Power monitoring via DMM (SCPI) or Tasmota energy monitoring
+- **Tasmota**: `tasmota_control`, `list_tasmota_devices`, `power_cycle_device` - Power cycle devices via Tasmota switches
 - **OTA/Containers**: `check_ota_status`, `trigger_ota_update`, `list_containers`, `deploy_container`, `get_system_status`, `get_firmware_version`, `get_foundries_registration_status`, `get_secure_boot_status`, `get_device_identity`
 - **Process Management**: `kill_stale_processes` - Kill duplicate processes that might interfere
 - **Remote Access**: `create_ssh_tunnel`, `list_ssh_tunnels`, `close_ssh_tunnel`, `access_serial_port`, `list_serial_devices` - SSH tunnels and serial port access
 - **Change Tracking**: `get_change_history`, `revert_changes` - Track and revert changes for security/debugging
 - **Batch/Regression**: `batch_operation`, `regression_test`, `get_device_groups`
+- **Network Mapping**: `create_network_map` - Visual map of network with device type, uptime, friendly names, power switches
+- **Device Verification**: `verify_device_identity`, `verify_device_by_ip`, `update_device_ip` - Verify device identity in DHCP environments
 - **Help**: `help` - Get usage documentation and examples
 
 ## Resources
@@ -103,7 +114,7 @@ pre-commit install
 black . && ruff check . --fix
 ```
 
-**Adding tools**: Create function in `tools/`, register in `server.py` (`handle_list_tools`, `handle_call_tool`).
+**Adding tools**: Create function in `lab_testing/tools/`, register in `lab_testing/server/tool_definitions.py` and `lab_testing/server/tool_handlers.py`.
 
 **Versioning**: Semantic versioning (MAJOR.MINOR.PATCH). Update `version.py`, see [CHANGELOG.md](CHANGELOG.md).
 

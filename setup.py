@@ -6,12 +6,12 @@ from setuptools import find_packages, setup
 
 # Read version from version module
 try:
-    from mcp_remote_testing.version import __version__
+    from lab_testing.version import __version__
 except ImportError:
     __version__ = "0.1.0"
 
 setup(
-    name="mcp-remote-testing",
+    name="lab-testing",
     version=__version__,
     description="MCP server for remote embedded hardware testing",
     author="Alex J Lennon",
@@ -28,7 +28,7 @@ setup(
     python_requires=">=3.8",
     entry_points={
         "console_scripts": [
-            "mcp-lab-testing=mcp_remote_testing.server:main",
+            "mcp-lab-testing=lab_testing.server:main",
         ],
     },
 )

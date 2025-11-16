@@ -5,6 +5,10 @@
 ## [0.1.0] - 2025-11-16
 
 ### Added
+- **Tasmota Power Switch Mapping**: Map Tasmota switches to devices they control
+- **Power Cycling**: `power_cycle_device` tool to power cycle devices via Tasmota switches
+- **Enhanced Network Mapping**: Network visualization now shows device type, uptime, friendly names, and power switch mappings
+- **Dual Power Monitoring**: Power monitoring supports both DMM (Digital Multimeter via SCPI) and Tasmota devices (via energy monitoring)
 - MCP server for remote lab testing
 - **Device Management**: list, test, SSH access
 - **VPN Management**: connect, disconnect, status
