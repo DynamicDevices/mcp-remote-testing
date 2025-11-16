@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+"""
+MCP Server Entry Point
+
+Copyright (C) 2025 Dynamic Devices Ltd
+License: GPL-3.0-or-later
+"""
+
+import sys
+from mcp_remote_testing.server import main
+import asyncio
+
+if __name__ == "__main__":
+    asyncio.run(main())
+

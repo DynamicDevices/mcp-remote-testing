@@ -1,0 +1,72 @@
+graph TB
+    subgraph "AI Assistant"
+        AI[Claude/Cursor<br/>AI Assistant]
+    end
+
+    subgraph "MCP Server"
+        MCP[MCP Server<br/>server.py]
+        TOOLS[Tools Module]
+        RES[Resources Module]
+    end
+
+    subgraph "Lab Testing Framework"
+        CFG[Config Manager<br/>config.py]
+        DEV[Device Manager<br/>tools/device_manager.py]
+        VPN[VPN Manager<br/>tools/vpn_manager.py]
+        PWR[Power Monitor<br/>tools/power_monitor.py]
+        TAS[Tasmota Control<br/>tools/tasmota_control.py]
+    end
+
+    subgraph "Lab Infrastructure"
+        JSON[Device Config<br/>lab_devices.json]
+        WG[WireGuard VPN<br/>wg0.conf]
+        SSH[SSH Keys]
+    end
+
+    subgraph "Hardware"
+        BOARD1[iMX93 E-ink<br/>192.168.2.22]
+        BOARD2[iMX93 E-ink<br/>192.168.2.132]
+        SENTAI[iMX8MM Sentai<br/>192.168.2.18]
+        DMM[Keysight DMM<br/>192.168.2.115]
+        TASMOTA[Tasmota Switch<br/>192.168.2.88]
+    end
+
+    AI -->|MCP Protocol| MCP
+    MCP --> TOOLS
+    MCP --> RES
+    TOOLS --> DEV
+    TOOLS --> VPN
+    TOOLS --> PWR
+    TOOLS --> TAS
+    DEV --> CFG
+    VPN --> CFG
+    PWR --> CFG
+    TAS --> CFG
+    CFG --> JSON
+    CFG --> WG
+    CFG --> SSH
+    DEV -->|SSH| BOARD1
+    DEV -->|SSH| BOARD2
+    DEV -->|SSH| SENTAI
+    VPN -->|WireGuard| BOARD1
+    VPN -->|WireGuard| BOARD2
+    VPN -->|WireGuard| SENTAI
+    PWR -->|SCPI| DMM
+    TAS -->|HTTP| TASMOTA
+    TASMOTA -->|Power Control| BOARD2
+
+    style AI fill:#e1f5ff
+    style MCP fill:#fff4e1
+    style MCP fill:#fff4e1
+    style TOOLS fill:#f3e5f5
+    style RES fill:#f3e5f5
+    style CFG fill:#e8f5e9
+    style JSON fill:#fff9c4
+    style WG fill:#fff9c4
+    style SSH fill:#fff9c4
+    style BOARD1 fill:#ffebee
+    style BOARD2 fill:#ffebee
+    style SENTAI fill:#ffebee
+    style DMM fill:#ffebee
+    style TASMOTA fill:#ffebee
+
