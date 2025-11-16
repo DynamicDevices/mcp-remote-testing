@@ -73,7 +73,7 @@ def get_persistent_ssh_connection(
     # Check if we already have a connection
     with _pool_lock:
         if device_id in _connection_pool:
-            process, last_used = _connection_pool[device_id]
+            process, _last_used = _connection_pool[device_id]
             if process.poll() is None:  # Still alive
                 # Update last used time
                 _connection_pool[device_id] = (process, time.time())
