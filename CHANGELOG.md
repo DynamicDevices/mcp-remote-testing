@@ -2,6 +2,19 @@
 
 [Semantic Versioning](https://semver.org/)
 
+## [0.2.0] - 2025-11-16
+
+### Changed
+- **Package Rename**: Renamed from `lab-testing` to `ai-lab-testing` for better clarity
+- **Repository Rename**: Repository renamed from `mcp-remote-testing` to `ai-lab-testing`
+- **Cache Directory**: Updated cache directory from `~/.cache/lab-testing` to `~/.cache/ai-lab-testing`
+- **Documentation Cleanup**: Removed redundant planning documents (FEATURES.md, IMPROVEMENTS.md, ROADMAP.md)
+
+### Fixed
+- Updated all references to new package and repository names
+- Updated .gitignore for new cache directory paths
+- Updated CI workflows and scripts for new repository name
+
 ## [0.1.0] - 2025-11-16
 
 ### Added

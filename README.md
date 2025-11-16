@@ -7,7 +7,7 @@
 
 MCP server exposing remote embedded hardware testing capabilities to AI assistants.
 
-**Version**: 0.1.0
+**Version**: 0.2.0
 
 > **⚠️ ALPHA QUALITY WARNING**: This package is currently in **alpha** development status. It is **not ready for professional or production use**. The API may change, features may be incomplete, and there may be bugs. Use at your own risk. See [PUBLISHING.md](PUBLISHING.md) for more details.
 
