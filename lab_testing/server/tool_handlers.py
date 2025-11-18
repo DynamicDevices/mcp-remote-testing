@@ -61,6 +61,18 @@ from lab_testing.tools.file_transfer import (
     copy_files_to_device_parallel,
     sync_directory_to_device,
 )
+from lab_testing.tools.foundries_vpn import (
+    check_foundries_vpn_client_config,
+    connect_foundries_vpn,
+    disable_foundries_vpn_device,
+    enable_foundries_vpn_device,
+    foundries_vpn_status,
+    generate_foundries_vpn_client_config_template,
+    get_foundries_vpn_server_config,
+    list_foundries_devices,
+    setup_foundries_vpn,
+    verify_foundries_vpn_connection,
+)
 from lab_testing.tools.ota_manager import (
     check_ota_status,
     deploy_container,
@@ -788,6 +800,90 @@ def handle_tool(
                         TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))
                     ]
             result = setup_networkmanager_connection(config_path)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        # Foundries VPN Management (server-based WireGuard VPN)
+        if name == "foundries_vpn_status":
+            result = foundries_vpn_status()
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "connect_foundries_vpn":
+            config_path = arguments.get("config_path")
+            result = connect_foundries_vpn(config_path)
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "get_foundries_vpn_server_config":
+            factory = arguments.get("factory")
+            result = get_foundries_vpn_server_config(factory)
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "list_foundries_devices":
+            factory = arguments.get("factory")
+            result = list_foundries_devices(factory)
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "enable_foundries_vpn_device":
+            device_name = arguments.get("device_name")
+            if not device_name:
+                error_msg = "device_name is required"
+                duration = time.time() - start_time
+                record_tool_call(name, False, duration)
+                return [TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))]
+            factory = arguments.get("factory")
+            result = enable_foundries_vpn_device(device_name, factory)
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "disable_foundries_vpn_device":
+            device_name = arguments.get("device_name")
+            if not device_name:
+                error_msg = "device_name is required"
+                duration = time.time() - start_time
+                record_tool_call(name, False, duration)
+                return [TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))]
+            factory = arguments.get("factory")
+            result = disable_foundries_vpn_device(device_name, factory)
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "check_foundries_vpn_client_config":
+            config_path = arguments.get("config_path")
+            result = check_foundries_vpn_client_config(config_path)
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "generate_foundries_vpn_client_config_template":
+            output_path = arguments.get("output_path")
+            factory = arguments.get("factory")
+            result = generate_foundries_vpn_client_config_template(output_path, factory)
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "setup_foundries_vpn":
+            config_path = arguments.get("config_path")
+            factory = arguments.get("factory")
+            auto_generate_config = arguments.get("auto_generate_config", False)
+            result = setup_foundries_vpn(config_path, factory, auto_generate_config)
+            result = format_tool_response(result, name)
+            _record_tool_result(name, result, request_id, start_time)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "verify_foundries_vpn_connection":
+            result = verify_foundries_vpn_connection()
+            result = format_tool_response(result, name)
             _record_tool_result(name, result, request_id, start_time)
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 

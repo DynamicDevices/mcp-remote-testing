@@ -187,6 +187,197 @@ def get_all_tools() -> List[Tool]:
             description="Get detailed WireGuard VPN statistics (transfer data, handshakes, latency)",
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
+        # Foundries VPN Tools (server-based WireGuard VPN)
+        Tool(
+            name="foundries_vpn_status",
+            description=(
+                "Get Foundries VPN connection status. "
+                "Foundries VPN uses WireGuard but with a server-based architecture where devices connect "
+                "to a centralized VPN server managed by FoundriesFactory. "
+                "Requires fioctl CLI tool to be installed and configured."
+            ),
+            inputSchema={"type": "object", "properties": {}, "required": []},
+        ),
+        Tool(
+            name="connect_foundries_vpn",
+            description=(
+                "Connect to Foundries VPN server. "
+                "Requires a WireGuard configuration file obtained from FoundriesFactory. "
+                "The config can be obtained via FoundriesFactory web interface or API. "
+                "Searches for config in standard locations if not provided."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "config_path": {
+                        "type": "string",
+                        "description": "Optional path to WireGuard config file for Foundries VPN. If not provided, searches for Foundries VPN config in standard locations.",
+                    }
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="get_foundries_vpn_server_config",
+            description=(
+                "Get Foundries VPN server configuration using fioctl API. "
+                "Returns WireGuard server endpoint, address, and public key. "
+                "This is the server that devices connect to (e.g., proxmox.dynamicdevices.co.uk). "
+                "Requires fioctl CLI tool to be installed and configured."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "factory": {
+                        "type": "string",
+                        "description": "Optional factory name. If not provided, uses default factory from fioctl config.",
+                    }
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="list_foundries_devices",
+            description=(
+                "List devices accessible via Foundries VPN. "
+                "Uses fioctl to list devices in the FoundriesFactory that have WireGuard enabled. "
+                "Requires fioctl CLI tool to be installed and configured."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "factory": {
+                        "type": "string",
+                        "description": "Optional factory name. If not provided, uses default factory from fioctl config.",
+                    }
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="enable_foundries_vpn_device",
+            description=(
+                "Enable WireGuard VPN on a Foundries device. "
+                "Uses fioctl to enable WireGuard configuration on a device. "
+                "The device will connect to the Foundries VPN server after OTA update (up to 5 minutes). "
+                "Requires fioctl CLI tool to be installed and configured."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "device_name": {
+                        "type": "string",
+                        "description": "Name of the device to enable VPN on",
+                    },
+                    "factory": {
+                        "type": "string",
+                        "description": "Optional factory name. If not provided, uses default factory from fioctl config.",
+                    },
+                },
+                "required": ["device_name"],
+            },
+        ),
+        Tool(
+            name="disable_foundries_vpn_device",
+            description=(
+                "Disable WireGuard VPN on a Foundries device. "
+                "Uses fioctl to disable WireGuard configuration on a device. "
+                "The device will disconnect from the Foundries VPN server after OTA update (up to 5 minutes). "
+                "Requires fioctl CLI tool to be installed and configured."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "device_name": {
+                        "type": "string",
+                        "description": "Name of the device to disable VPN on",
+                    },
+                    "factory": {
+                        "type": "string",
+                        "description": "Optional factory name. If not provided, uses default factory from fioctl config.",
+                    },
+                },
+                "required": ["device_name"],
+            },
+        ),
+        Tool(
+            name="check_foundries_vpn_client_config",
+            description=(
+                "Check if Foundries VPN client configuration file exists and is valid. "
+                "Validates the WireGuard config file format and checks for required fields. "
+                "Searches standard locations if config_path not provided."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "config_path": {
+                        "type": "string",
+                        "description": "Optional path to config file. If not provided, searches standard locations.",
+                    }
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="generate_foundries_vpn_client_config_template",
+            description=(
+                "Generate a Foundries VPN client configuration template with server details. "
+                "Gets server configuration from FoundriesFactory and creates a template config file "
+                "that the user can fill in with their private key and assigned IP address. "
+                "Requires fioctl CLI tool to be installed and configured."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional path to save config file. If not provided, uses standard location (~/.config/wireguard/foundries.conf).",
+                    },
+                    "factory": {
+                        "type": "string",
+                        "description": "Optional factory name. If not provided, uses default factory from fioctl config.",
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="setup_foundries_vpn",
+            description=(
+                "Automated end-to-end Foundries VPN setup. "
+                "Checks prerequisites, validates or generates client config, and connects to VPN. "
+                "This is a convenience function that automates the entire setup process. "
+                "Requires fioctl CLI tool and WireGuard tools to be installed."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "config_path": {
+                        "type": "string",
+                        "description": "Optional path to client config file. If not provided, searches standard locations.",
+                    },
+                    "factory": {
+                        "type": "string",
+                        "description": "Optional factory name. If not provided, uses default factory from fioctl config.",
+                    },
+                    "auto_generate_config": {
+                        "type": "boolean",
+                        "description": "If True and config not found, generates template config (requires manual editing). Default: False",
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="verify_foundries_vpn_connection",
+            description=(
+                "Verify that Foundries VPN connection is working. "
+                "Tests connectivity to VPN server and checks routing. "
+                "Use this after connecting to ensure VPN is functioning correctly."
+            ),
+            inputSchema={"type": "object", "properties": {}, "required": []},
+        ),
         Tool(
             name="create_network_map",
             description="Create a visual map of running systems on the target network showing what's up and what isn't. Supports multiple layouts, export formats, device grouping, historical tracking, and performance metrics visualization.",

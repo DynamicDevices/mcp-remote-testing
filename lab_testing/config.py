@@ -27,6 +27,10 @@ LAB_DEVICES_JSON = CONFIG_DIR / "lab_devices.json"
 # If not set, searches common locations
 VPN_CONFIG_PATH_ENV = os.getenv("VPN_CONFIG_PATH")
 
+# Foundries VPN configuration - can be overridden via FOUNDRIES_VPN_CONFIG_PATH environment variable
+# If not set, searches Foundries-specific locations
+FOUNDRIES_VPN_CONFIG_PATH_ENV = os.getenv("FOUNDRIES_VPN_CONFIG_PATH")
+
 # Target network configuration - can be overridden via TARGET_NETWORK environment variable
 # Default target network for lab testing operations
 DEFAULT_TARGET_NETWORK = os.getenv("TARGET_NETWORK", "192.168.2.0/24")
@@ -89,6 +93,70 @@ def get_vpn_config() -> Optional[Path]:
                     if f.name == "wg0.conf":
                         return f
                 return conf_files[0]
+
+    return None
+
+
+def get_foundries_vpn_config() -> Optional[Path]:
+    """
+    Get path to Foundries VPN (WireGuard) configuration file.
+
+    Foundries VPN uses WireGuard but with a server-based architecture where devices
+    connect to a centralized VPN server managed by FoundriesFactory.
+
+    Search order:
+    1. FOUNDRIES_VPN_CONFIG_PATH environment variable (if set)
+    2. Foundries-specific filenames in SECRETS_DIR (foundries-vpn.conf, foundries.conf)
+    3. User config: ~/.config/wireguard/foundries.conf
+    4. System config: /etc/wireguard/foundries.conf
+
+    Returns:
+        Path to Foundries VPN config file, or None if not found
+    """
+    # 1. Check environment variable first
+    if FOUNDRIES_VPN_CONFIG_PATH_ENV:
+        config_path = Path(FOUNDRIES_VPN_CONFIG_PATH_ENV)
+        if config_path.exists():
+            return config_path
+
+    # 2. Check Foundries-specific filenames in secrets directory
+    foundries_names = ["foundries-vpn.conf", "foundries.conf"]
+    for name in foundries_names:
+        config_path = SECRETS_DIR / name
+        if config_path.exists():
+            return config_path
+
+    # 3. Check user config location
+    user_config = Path.home() / ".config" / "wireguard" / "foundries.conf"
+    try:
+        if user_config.exists():
+            return user_config
+    except (PermissionError, OSError):
+        pass
+
+    # 4. Check system config location (may require root)
+    system_config = Path("/etc/wireguard/foundries.conf")
+    try:
+        if system_config.exists():
+            return system_config
+    except (PermissionError, OSError):
+        pass
+
+    # 5. Also check for any .conf files with "foundries" in the name
+    if SECRETS_DIR.exists():
+        for conf_file in SECRETS_DIR.glob("*.conf"):
+            if "foundries" in conf_file.name.lower():
+                return conf_file
+
+    # Check user wireguard directory for any foundries configs
+    user_wg_dir = Path.home() / ".config" / "wireguard"
+    try:
+        if user_wg_dir.exists():
+            for conf_file in user_wg_dir.glob("*.conf"):
+                if "foundries" in conf_file.name.lower():
+                    return conf_file
+    except (PermissionError, OSError):
+        pass
 
     return None
 
