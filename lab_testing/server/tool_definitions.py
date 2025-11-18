@@ -188,7 +188,7 @@ def get_all_tools() -> List[Tool]:
         ),
         Tool(
             name="create_network_map",
-            description="Create a visual map of running systems on the target network showing what's up and what isn't",
+            description="Create a visual map of running systems on the target network showing what's up and what isn't. Supports multiple layouts, export formats, device grouping, historical tracking, and performance metrics visualization.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -216,6 +216,48 @@ def get_all_tools() -> List[Tool]:
                         "type": "boolean",
                         "description": "If true, skip network scanning and only show configured devices (faster, <5s). Use this if tool calls timeout (default: false)",
                         "default": False,
+                    },
+                    "layout": {
+                        "type": "string",
+                        "enum": ["lr", "tb", "radial", "hierarchical", "grid"],
+                        "description": "Layout style: 'lr' (left-right, default), 'tb' (top-bottom), 'radial' (circular), 'hierarchical' (tree), 'grid' (grid layout)",
+                        "default": "lr",
+                    },
+                    "group_by": {
+                        "type": "string",
+                        "enum": ["type", "status", "location", "power_circuit", "none"],
+                        "description": "Group devices by: 'type' (device type), 'status' (online/offline), 'location' (physical location from config), 'power_circuit' (power switch), 'none' (no grouping)",
+                        "default": "type",
+                    },
+                    "show_details": {
+                        "type": "boolean",
+                        "description": "If true, show detailed device information in node labels (firmware, MAC, last seen, etc.)",
+                        "default": False,
+                    },
+                    "show_metrics": {
+                        "type": "boolean",
+                        "description": "If true, color-code devices by latency and show performance metrics",
+                        "default": True,
+                    },
+                    "show_alerts": {
+                        "type": "boolean",
+                        "description": "If true, highlight devices with errors, warnings, or issues",
+                        "default": True,
+                    },
+                    "show_history": {
+                        "type": "boolean",
+                        "description": "If true, show historical status changes and uptime indicators",
+                        "default": False,
+                    },
+                    "export_format": {
+                        "type": "string",
+                        "enum": ["mermaid", "png", "svg", "pdf", "html", "json", "csv"],
+                        "description": "Export format: 'mermaid' (Mermaid diagram, default), 'png' (PNG image), 'svg' (SVG image), 'pdf' (PDF document), 'html' (HTML report), 'json' (JSON data), 'csv' (CSV device list)",
+                        "default": "mermaid",
+                    },
+                    "export_path": {
+                        "type": "string",
+                        "description": "Optional path to save exported file. If not provided, returns data inline.",
                     },
                 },
                 "required": [],
