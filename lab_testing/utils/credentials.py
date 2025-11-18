@@ -54,6 +54,7 @@ def save_credentials(credentials: Dict[str, Dict[str, str]]):
 def get_credential(device_id: str, credential_type: str = "ssh") -> Optional[Dict[str, str]]:
     """
     Get cached credential for a device.
+    Falls back to default credentials (fio/fio) if no cached credential exists.
 
     Args:
         device_id: Device identifier
@@ -64,7 +65,19 @@ def get_credential(device_id: str, credential_type: str = "ssh") -> Optional[Dic
     """
     credentials = load_credentials()
     key = f"{device_id}:{credential_type}"
-    return credentials.get(key)
+    
+    # Check cached credentials first
+    if key in credentials:
+        return credentials.get(key)
+    
+    # Fall back to default credentials (fio/fio) for SSH
+    if credential_type == "ssh":
+        return {
+            "username": "fio",
+            "password": "fio"
+        }
+    
+    return None
 
 
 def cache_credential(
@@ -279,7 +292,7 @@ def get_ssh_command(
     Returns:
         Command list for subprocess
     """
-    # Try key-based auth first
+    # Try key-based auth first (unless password is forced)
     if not use_password and check_ssh_key_installed(device_ip, username):
         return [
             "ssh",
@@ -293,10 +306,12 @@ def get_ssh_command(
             command,
         ]
 
-    # Fall back to password if needed
-    if use_password and device_id:
+    # Fall back to password if needed (or if use_password=True)
+    if device_id:
         cred = get_credential(device_id, "ssh")
         if cred and cred.get("password"):
+            # Use username from credential if available, otherwise use provided username
+            cred_username = cred.get("username", username)
             return [
                 "sshpass",
                 "-p",
@@ -306,7 +321,7 @@ def get_ssh_command(
                 "StrictHostKeyChecking=accept-new",
                 "-o",
                 "ConnectTimeout=10",
-                f"{username}@{device_ip}",
+                f"{cred_username}@{device_ip}",
                 command,
             ]
 

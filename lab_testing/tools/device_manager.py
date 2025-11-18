@@ -511,22 +511,22 @@ def list_devices(
                     "ip": switch_info.get("ip"),
                 }
 
-        # Add cache age/last seen timestamp
-        if cached_info:
-            cached_at = cached_info.get("cached_at")
-            if cached_at:
-                import time
+            # Add cache age/last seen timestamp
+            if cached_info:
+                cached_at = cached_info.get("cached_at")
+                if cached_at and isinstance(cached_at, (int, float)):
+                    import time
 
-                cache_age_seconds = time.time() - cached_at
-                device_entry["cache_age_seconds"] = cache_age_seconds
-                if cache_age_seconds < 60:
-                    device_entry["last_seen"] = f"{int(cache_age_seconds)}s ago"
-                elif cache_age_seconds < 3600:
-                    device_entry["last_seen"] = f"{int(cache_age_seconds / 60)}m ago"
-                elif cache_age_seconds < 86400:
-                    device_entry["last_seen"] = f"{int(cache_age_seconds / 3600)}h ago"
-                else:
-                    device_entry["last_seen"] = f"{int(cache_age_seconds / 86400)}d ago"
+                    cache_age_seconds = time.time() - cached_at
+                    device_entry["cache_age_seconds"] = cache_age_seconds
+                    if cache_age_seconds < 60:
+                        device_entry["last_seen"] = f"{int(cache_age_seconds)}s ago"
+                    elif cache_age_seconds < 3600:
+                        device_entry["last_seen"] = f"{int(cache_age_seconds / 60)}m ago"
+                    elif cache_age_seconds < 86400:
+                        device_entry["last_seen"] = f"{int(cache_age_seconds / 3600)}h ago"
+                    else:
+                        device_entry["last_seen"] = f"{int(cache_age_seconds / 86400)}d ago"
             else:
                 device_entry["last_seen"] = "Unknown"
 
@@ -896,9 +896,14 @@ def ssh_to_device(
 
     logger.debug(f"Executing SSH command on {device_id} ({ip}): {command}")
 
-    # Determine username
+    # Determine username - check credentials first (including defaults)
     if not username:
-        username = device.get("ssh_user", "root")
+        from lab_testing.utils.credentials import get_credential
+        cred = get_credential(device_id, "ssh")
+        if cred and cred.get("username"):
+            username = cred["username"]
+        else:
+            username = device.get("ssh_user", "root")
 
     # Record change for tracking
     from lab_testing.utils.change_tracker import record_ssh_command
@@ -942,19 +947,51 @@ def ssh_to_device(
             logger.debug(
                 f"Connection pool failed for {device_id}, using direct connection: {pool_error}"
             )
-            # Fallback to direct connection
+            # Try SSH key authentication first
             ssh_cmd = get_ssh_command(ip, username, command, device_id, use_password=False)
 
             # Add port if not default
             if ssh_port != 22:
                 # Insert port option before username@ip
-                port_idx = ssh_cmd.index(f"{username}@{ip}")
-                ssh_cmd.insert(port_idx, "-p")
-                ssh_cmd.insert(port_idx + 1, str(ssh_port))
+                username_ip = f"{username}@{ip}"
+                if username_ip in ssh_cmd:
+                    port_idx = ssh_cmd.index(username_ip)
+                    ssh_cmd.insert(port_idx, "-p")
+                    ssh_cmd.insert(port_idx + 1, str(ssh_port))
+                else:
+                    # Handle case where credential username is different
+                    for i, arg in enumerate(ssh_cmd):
+                        if "@" in arg and ip in arg:
+                            ssh_cmd.insert(i, "-p")
+                            ssh_cmd.insert(i + 1, str(ssh_port))
+                            break
 
             result = subprocess.run(
                 ssh_cmd, check=False, capture_output=True, text=True, timeout=30
             )
+            
+            # If SSH key auth failed, try password authentication
+            if result.returncode != 0 and "Permission denied" in result.stderr:
+                logger.debug(f"SSH key auth failed for {device_id}, trying password authentication")
+                # Check if credentials are available (including defaults)
+                from lab_testing.utils.credentials import get_credential
+                cred = get_credential(device_id, "ssh")
+                if cred and cred.get("password"):
+                    # Use password authentication
+                    ssh_cmd = get_ssh_command(ip, username, command, device_id, use_password=True)
+                    
+                    # Add port if not default
+                    if ssh_port != 22:
+                        # Find username@ip in command
+                        for i, arg in enumerate(ssh_cmd):
+                            if "@" in arg and ip in arg:
+                                ssh_cmd.insert(i, "-p")
+                                ssh_cmd.insert(i + 1, str(ssh_port))
+                                break
+                    
+                    result = subprocess.run(
+                        ssh_cmd, check=False, capture_output=True, text=True, timeout=30
+                    )
 
         friendly_name = device.get("friendly_name") or device.get("name", device_id)
 

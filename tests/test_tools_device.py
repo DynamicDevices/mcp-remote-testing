@@ -32,13 +32,13 @@ class TestListDevices:
     def test_list_devices_success(
         self,
         mock_target_network,
-        mock_load_config,
-        mock_scan,
-        mock_cache,
-        mock_identify,
-        mock_detect_tasmota,
-        mock_detect_test,
         mock_vpn,
+        mock_detect_test,
+        mock_detect_tasmota,
+        mock_identify,
+        mock_cache,
+        mock_scan,
+        mock_load_config,
         sample_device_config,
     ):
         """Test successful device listing"""
@@ -53,8 +53,13 @@ class TestListDevices:
         mock_target_network.return_value = "192.168.1.0/24"
         # Mock VPN status
         mock_vpn.return_value = {"connected": False}
-        # Mock network scan to return empty list (no active hosts, test only uses configured devices)
-        mock_scan.return_value = []
+        # Mock network scan to return IPs from configured devices
+        # list_devices only processes devices in active_hosts, so we need to include them
+        mock_scan.return_value = [
+            {"ip": "192.168.1.100"},  # test_device_1
+            {"ip": "192.168.1.101"},  # test_device_2
+            {"ip": "192.168.1.88"},   # tasmota_switch_1
+        ]
         # Mock cache to return empty (no cached devices)
         mock_cache.return_value = None
         # Mock detection to return None (no auto-detected devices)

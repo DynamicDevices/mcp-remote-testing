@@ -16,6 +16,9 @@ class TestCreateNetworkMap:
     """Tests for create_network_map"""
 
     @patch("lab_testing.tools.network_mapper.get_lab_devices_config")
+    @patch("lab_testing.tools.device_manager.load_device_config")
+    @patch("lab_testing.tools.device_manager._scan_network_range")
+    @patch("lab_testing.tools.vpn_manager.get_vpn_status")
     @patch("lab_testing.config.get_target_network")
     @patch("lab_testing.tools.network_mapper.test_device")
     @patch("lab_testing.tools.network_mapper.ssh_to_device")
@@ -26,6 +29,9 @@ class TestCreateNetworkMap:
         mock_ssh,
         mock_test,
         mock_target_network,
+        mock_vpn,
+        mock_scan,
+        mock_load_config,
         mock_config,
         sample_device_config,
     ):
@@ -33,9 +39,19 @@ class TestCreateNetworkMap:
         with open(sample_device_config) as f:
             config = json.load(f)
             mock_config.return_value = sample_device_config
+            # Mock load_device_config to return the config data
+            mock_load_config.return_value = config
 
         # Mock target network to match sample config devices (192.168.1.0/24)
         mock_target_network.return_value = "192.168.1.0/24"
+        # Mock VPN status
+        mock_vpn.return_value = {"connected": False}
+        # Mock network scan to return IPs from configured devices
+        mock_scan.return_value = [
+            {"ip": "192.168.1.100"},  # test_device_1
+            {"ip": "192.168.1.101"},  # test_device_2
+            {"ip": "192.168.1.88"},   # tasmota_switch_1
+        ]
 
         mock_test.return_value = {
             "device_id": "test_device_1",

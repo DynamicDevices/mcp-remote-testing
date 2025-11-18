@@ -38,6 +38,11 @@ from lab_testing.tools.batch_operations import (
     get_device_groups,
     regression_test,
 )
+from lab_testing.tools.credential_manager import (
+    cache_device_credentials,
+    check_ssh_key_status,
+    install_ssh_key_on_device,
+)
 from lab_testing.tools.device_manager import (
     list_devices,
     ssh_to_device,
@@ -857,7 +862,7 @@ def handle_tool(
 
             # Return PNG image as primary visualization (since Cursor doesn't render Mermaid yet)
             contents = []
-            
+
             # Add PNG image from Mermaid conversion (preferred over matplotlib version)
             png_to_use = mermaid_png_base64 if mermaid_png_base64 else image_base64
 
@@ -1125,6 +1130,91 @@ def handle_tool(
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
         # Device Management - Friendly Name Update
+        if name == "cache_device_credentials":
+            device_id = arguments.get("device_id")
+            username = arguments.get("username")
+            password = arguments.get("password")
+            credential_type = arguments.get("credential_type", "ssh")
+
+            if not device_id or not username:
+                error_msg = "Both 'device_id' and 'username' are required"
+                logger.error(f"[{request_id}] {error_msg}")
+                _record_tool_result(
+                    name, {"success": False, "error": error_msg}, request_id, start_time
+                )
+                return [TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))]
+
+            try:
+                result = cache_device_credentials(
+                    device_id=device_id,
+                    username=username,
+                    password=password,
+                    credential_type=credential_type,
+                )
+                _record_tool_result(name, result, request_id, start_time)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            except Exception as e:
+                error_msg = f"Failed to cache credentials: {e!s}"
+                logger.error(f"[{request_id}] {error_msg}", exc_info=True)
+                _record_tool_result(
+                    name, {"success": False, "error": error_msg}, request_id, start_time
+                )
+                return [TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))]
+
+        if name == "check_ssh_key_status":
+            device_id = arguments.get("device_id")
+            username = arguments.get("username")
+
+            if not device_id:
+                error_msg = "device_id is required"
+                logger.error(f"[{request_id}] {error_msg}")
+                _record_tool_result(
+                    name, {"success": False, "error": error_msg}, request_id, start_time
+                )
+                return [TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))]
+
+            try:
+                result = check_ssh_key_status(device_id=device_id, username=username)
+                _record_tool_result(name, result, request_id, start_time)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            except Exception as e:
+                error_msg = f"Failed to check SSH key status: {e!s}"
+                logger.error(f"[{request_id}] {error_msg}", exc_info=True)
+                _record_tool_result(
+                    name, {"success": False, "error": error_msg}, request_id, start_time
+                )
+                return [TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))]
+
+        if name == "install_ssh_key":
+            device_id = arguments.get("device_id")
+            username = arguments.get("username")
+            password = arguments.get("password")
+
+            if not device_id:
+                error_msg = "device_id is required"
+                logger.error(f"[{request_id}] {error_msg}")
+                _record_tool_result(
+                    name, {"success": False, "error": error_msg}, request_id, start_time
+                )
+                return [TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))]
+
+            try:
+                result = install_ssh_key_on_device(
+                    device_id=device_id, username=username, password=password
+                )
+                _record_tool_result(name, result, request_id, start_time)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            except Exception as e:
+                error_msg = f"Failed to install SSH key: {e!s}"
+                logger.error(f"[{request_id}] {error_msg}", exc_info=True)
+                _record_tool_result(
+                    name, {"success": False, "error": error_msg}, request_id, start_time
+                )
+                return [TextContent(type="text", text=json.dumps({"error": error_msg}, indent=2))]
+
         if name == "update_device_friendly_name":
             from lab_testing.utils.device_cache import update_cached_friendly_name
 

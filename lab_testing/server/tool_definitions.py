@@ -98,7 +98,8 @@ def get_all_tools() -> List[Tool]:
             name="ssh_to_device",
             description=(
                 "Execute an SSH command on a lab device. "
-                "Prefers SSH keys, uses sshpass for passwords if needed. "
+                "Prefers SSH keys, falls back to password authentication if keys not available. "
+                "Uses default credentials (fio/fio) if no SSH keys and no cached credentials. "
                 "Supports both device_id and friendly_name. "
                 "Best practice: Test device connectivity first with 'test_device'. "
                 "In DHCP environments, verify device identity with 'verify_device_identity'. "
@@ -656,6 +657,74 @@ def get_all_tools() -> List[Tool]:
                     },
                 },
                 "required": ["ip", "friendly_name"],
+            },
+        ),
+        Tool(
+            name="cache_device_credentials",
+            description="Cache SSH credentials (username/password) for a device. Credentials are stored securely in ~/.cache/ai-lab-testing/credentials.json. Prefer SSH keys over passwords when possible.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "device_id": {
+                        "type": "string",
+                        "description": "Device identifier (device_id or friendly_name). Use 'list_devices' to see available options.",
+                    },
+                    "username": {
+                        "type": "string",
+                        "description": "SSH username",
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "SSH password (optional, prefer SSH keys)",
+                    },
+                    "credential_type": {
+                        "type": "string",
+                        "enum": ["ssh", "sudo"],
+                        "default": "ssh",
+                        "description": "Type of credential to cache",
+                    },
+                },
+                "required": ["device_id", "username"],
+            },
+        ),
+        Tool(
+            name="check_ssh_key_status",
+            description="Check if SSH key authentication is working for a device. Returns status of key installation and whether default SSH keys exist.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "device_id": {
+                        "type": "string",
+                        "description": "Device identifier (device_id or friendly_name). Use 'list_devices' to see available options.",
+                    },
+                    "username": {
+                        "type": "string",
+                        "description": "SSH username (optional, uses device default from config)",
+                    },
+                },
+                "required": ["device_id"],
+            },
+        ),
+        Tool(
+            name="install_ssh_key",
+            description="Install SSH public key on target device for passwordless access. Uses default SSH key from ~/.ssh/id_rsa.pub or ~/.ssh/id_ed25519.pub. Requires password for initial access if key not already installed. Will use cached/default credentials if password not provided.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "device_id": {
+                        "type": "string",
+                        "description": "Device identifier (device_id or friendly_name). Use 'list_devices' to see available options.",
+                    },
+                    "username": {
+                        "type": "string",
+                        "description": "SSH username (optional, uses device default from config)",
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "Password for initial access (if key not installed, uses cached/default if available)",
+                    },
+                },
+                "required": ["device_id"],
             },
         ),
     ]
