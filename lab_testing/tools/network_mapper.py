@@ -131,19 +131,22 @@ def create_network_map(
 ) -> Dict[str, Any]:
     """
     Create a visual map of the network showing what's up and what isn't.
+    
+    Now uses list_devices() data for comprehensive device information including
+    Tasmota power states, test equipment detection, and SSH status.
 
     Args:
         networks: List of network CIDRs to scan (e.g., ["192.168.1.0/24"])
                   If None, uses networks from config
-        scan_networks: If True, actively scan networks for hosts
-        test_configured_devices: If True, test all configured devices
+        scan_networks: If True, actively scan networks for hosts (for unknown hosts discovery)
+        test_configured_devices: If True, use list_devices to get device status (always True now)
         max_hosts_per_network: Maximum hosts to scan per network
         quick_mode: If True, skip network scanning entirely (faster, <5s)
 
     Returns:
         Dictionary with network map including:
         - Active hosts discovered
-        - Configured devices status
+        - Configured devices status (from list_devices)
         - Network topology visualization
         - Summary statistics
     """
@@ -172,110 +175,99 @@ def create_network_map(
             "summary": {},
         }
 
-        # Scan networks for active hosts (skip if quick_mode)
+        # Use list_devices to get comprehensive device information
+        # This includes scanning, identification, Tasmota detection, test equipment detection, etc.
+        if test_configured_devices:
+            logger.info("Using list_devices() to get comprehensive device information...")
+            from lab_testing.tools.device_manager import list_devices
+            
+            # Get all devices from list_devices (uses cache, does scanning/identification)
+            devices_result = list_devices(show_summary=False)
+            
+            if devices_result.get("success"):
+                # Transform list_devices output to network_map format
+                devices_by_type = devices_result.get("devices_by_type", {})
+                
+                # Flatten devices_by_type into a single list
+                all_devices = []
+                for device_type, device_list in devices_by_type.items():
+                    for device in device_list:
+                        device["_source_type"] = device_type
+                        all_devices.append(device)
+                
+                # Convert to configured_devices format (keyed by device_id)
+                device_statuses = {}
+                configured_ips = set()
+                
+                for device in all_devices:
+                    device_id = device.get("id") or device.get("device_id")
+                    if not device_id:
+                        continue
+                    
+                    ip = device.get("ip")
+                    if ip:
+                        configured_ips.add(ip)
+                    
+                    # Get power switch info
+                    power_switch = device.get("power_switch")
+                    if isinstance(power_switch, dict):
+                        power_switch = power_switch.get("device_id")
+                    
+                    # Determine ping/ssh status from device data
+                    status = device.get("status", "discovered")
+                    hostname = device.get("hostname")
+                    ssh_error = device.get("ssh_error")
+                    
+                    ping_ok = status in ["online", "discovered"]  # If device is discovered/online, ping worked
+                    ssh_ok = hostname is not None and not ssh_error  # SSH OK if we have hostname and no error
+                    
+                    # Map status: "discovered" means device is reachable (ping worked), so treat as "online" for network map
+                    # "online" means fully identified with SSH, "discovered" means pingable but not SSH'd
+                    network_map_status = "online" if status in ["online", "discovered"] else "offline"
+                    
+                    device_statuses[device_id] = {
+                        "device_id": device_id,
+                        "friendly_name": device.get("friendly_name") or device.get("name", device_id),
+                        "name": device.get("name") or device.get("friendly_name", device_id),
+                        "ip": ip,
+                        "type": device.get("device_type") or device.get("_source_type", "unknown"),
+                        "ping": ping_ok,
+                        "ssh": ssh_ok,
+                        "status": network_map_status,
+                        "power_switch": power_switch,
+                        "hostname": hostname,
+                        "tasmota_power_state": device.get("tasmota_power_state"),
+                        "tasmota_power_watts": device.get("tasmota_power_watts"),
+                        "equipment_type": device.get("equipment_type"),
+                    }
+                
+                result["configured_devices"] = device_statuses
+                # Store configured IPs for later comparison
+                configured_ips = set(configured_ips)
+                logger.info(f"Found {len(device_statuses)} devices from list_devices()")
+            else:
+                logger.warning(f"list_devices() failed: {devices_result.get('error', 'Unknown error')}")
+                configured_ips = set()
+        
+        # Scan networks for unknown hosts (hosts not in list_devices)
+        scanned_hosts = []
         if scan_networks and not quick_mode:
-            logger.info(f"Scanning {len(networks)} networks for active hosts...")
-            # Use faster timeout in quick mode
-            ping_timeout = 0.5  # Reduced from 1-2s for faster scanning
+            logger.info(f"Scanning {len(networks)} networks for unknown hosts...")
+            # Use faster timeout for scanning
+            ping_timeout = 0.5
             for network in networks:
                 active = _scan_network_range(network, max_hosts_per_network, timeout=ping_timeout)
-                result["active_hosts"].extend(active)
+                scanned_hosts.extend(active)
         elif quick_mode:
-            logger.info("Quick mode: Skipping network scan")
+            logger.info("Quick mode: Skipping network scan for unknown hosts")
+        
+        # Combine configured devices IPs with scanned hosts for active_hosts list
+        result["active_hosts"] = [
+            {"ip": ip, "status": "online"} for ip in configured_ips
+        ]
+        result["active_hosts"].extend(scanned_hosts)
 
-        # Test configured devices - ONLY on target network
-        if test_configured_devices:
-            # Filter devices to only those on the target network
-            from lab_testing.config import get_target_network
-
-            target_network = get_target_network()
-            target_network_prefix = target_network.split("/")[0]  # e.g., "192.168.2.0"
-            target_network_base = ".".join(
-                target_network_prefix.split(".")[:3]
-            )  # e.g., "192.168.2"
-
-            devices_on_target_network = {}
-            for device_id, device_info in devices.items():
-                ip = device_info.get("ip", "")
-                if ip:
-                    # Check if device IP is on target network
-                    device_network_base = ".".join(ip.split(".")[:3])
-                    if device_network_base == target_network_base:
-                        devices_on_target_network[device_id] = device_info
-
-            logger.info(
-                f"Testing {len(devices_on_target_network)} configured devices on target network {target_network} (filtered from {len(devices)} total)..."
-            )
-            device_statuses = {}
-
-            # Test devices in parallel with increased workers for better throughput
-            # Use more workers to take advantage of SSH multiplexing
-            max_workers = min(50, len(devices_on_target_network)) if devices_on_target_network else 1
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all device tests - only for devices on target network
-                futures = {
-                    executor.submit(test_device, device_id): device_id
-                    for device_id in devices_on_target_network
-                }
-
-                # Process results as they complete
-                for future in concurrent.futures.as_completed(futures):
-                    device_id = futures[future]
-                    try:
-                        test_result = future.result()
-                        device_info = devices_on_target_network[device_id]
-
-                        # Get additional info
-                        friendly_name = device_info.get("friendly_name") or device_info.get(
-                            "name", device_id
-                        )
-                        power_switch = get_power_switch_for_device(device_id)
-
-                        device_statuses[device_id] = {
-                            "device_id": device_id,
-                            "friendly_name": friendly_name,
-                            "name": device_info.get("name", "Unknown"),
-                            "ip": device_info.get("ip"),
-                            "type": device_info.get("device_type", "unknown"),
-                            "ping": (
-                                test_result.get("ping", {}).get("success", False)
-                                if isinstance(test_result.get("ping"), dict)
-                                else test_result.get("ping_reachable", False)
-                            ),
-                            "ssh": (
-                                test_result.get("ssh", {}).get("success", False)
-                                if isinstance(test_result.get("ssh"), dict)
-                                else test_result.get("ssh_available", False)
-                            ),
-                            "status": (
-                                "online"
-                                if (
-                                    test_result.get("ping", {}).get("success", False)
-                                    if isinstance(test_result.get("ping"), dict)
-                                    else test_result.get("ping_reachable", False)
-                                )
-                                else "offline"
-                            ),
-                            "power_switch": power_switch,
-                        }
-                    except Exception as e:
-                        device_info = devices[device_id]
-                        friendly_name = device_info.get("friendly_name") or device_info.get(
-                            "name", device_id
-                        )
-                        device_statuses[device_id] = {
-                            "device_id": device_id,
-                            "friendly_name": friendly_name,
-                            "name": device_info.get("name", "Unknown"),
-                            "ip": device_info.get("ip"),
-                            "type": device_info.get("device_type", "unknown"),
-                            "status": "error",
-                            "error": str(e),
-                        }
-
-            result["configured_devices"] = device_statuses
-
-        # Match active hosts with configured devices - ONLY process hosts on target network
+        # Match active hosts with configured devices - find unknown hosts
         configured_ips = {
             dev.get("ip") for dev in result["configured_devices"].values() if dev.get("ip")
         }
@@ -287,14 +279,18 @@ def create_network_map(
         target_network_base = ".".join(target_network.split("/")[0].split(".")[:3])
 
         for host in result["active_hosts"]:
-            ip = host["ip"]
+            ip = host.get("ip") if isinstance(host, dict) else host
+            if isinstance(host, str):
+                ip = host
+                host = {"ip": ip, "status": "online"}
+            
             # Only process hosts on target network
             host_network_base = ".".join(ip.split(".")[:3])
             if host_network_base != target_network_base:
                 continue  # Skip hosts not on target network
 
             if ip not in configured_ips:
-                # Check if we can identify it
+                # Check if we can identify it from config
                 device_info = _get_device_info_from_config(ip, config)
                 if device_info:
                     host["device_id"] = device_info["device_id"]
@@ -454,9 +450,10 @@ def generate_network_map_mermaid(network_map: Dict[str, Any]) -> str:
         return f"```mermaid\ngraph TD\n    Error[\"❌ Error: {network_map['error']}\"]\n```"
 
     try:
-        from lab_testing.config import get_target_network
+        from lab_testing.config import get_target_network, get_target_network_friendly_name
 
         target_network = get_target_network()
+        network_friendly_name = get_target_network_friendly_name()
 
         summary = network_map.get("summary", {})
         configured_devices = network_map.get("configured_devices", {})
@@ -486,19 +483,33 @@ def generate_network_map_mermaid(network_map: Dict[str, Any]) -> str:
             "other": "📱",
         }
 
-        # Build Mermaid diagram
-        lines = ["```mermaid", "graph TB"]
+        # Build Mermaid diagram with better layout for network visualization
+        # Use LR (left-right) layout for better network map appearance
+        lines = ["```mermaid", "graph LR"]
+        
+        # Add styling for subgraph titles to make them more visible and prevent overlap
+        # Set white background and improve subgraph title visibility
+        lines.append("    %%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#fff', 'primaryTextColor':'#000', 'primaryBorderColor':'#000', 'lineColor':'#000', 'secondaryColor':'#fff', 'tertiaryColor':'#fff', 'background':'#fff', 'subgraphTitleFontSize':'20px', 'subgraphTitleFontWeight':'bold', 'subgraphPadding':20}}}%%")
 
-        # Title with summary
+        # Title with summary - use friendly name if available
         online_count = summary.get("online_devices", 0)
         total_count = summary.get("total_configured_devices", 0)
-        title = f"Lab Network: {target_network} | {online_count} Online / {total_count} Total"
+        title = f"{network_friendly_name}: {target_network} | {online_count} Online / {total_count} Total"
         lines.append(f'    subgraph Network["{title}"]')
+        
+        # Organize devices into logical groups for better network map visualization
+        lines.append('        subgraph PowerSwitches["🔌 Power Switches"]')
 
         # Track nodes and power connections
         device_nodes = {}
-        tasmota_nodes = {}
+        tasmota_nodes = {}  # Maps node_id -> {"label": ..., "device_id": ...}
         power_connections = []  # List of (tasmota_id, device_id) tuples
+        
+        # Track all Tasmota devices (including those that don't power anything)
+        all_tasmota_devices = {}
+        
+        # Create mapping from device_id to node_id for power switch lookups
+        device_id_to_node_id = {}  # Maps device_id -> node_id
 
         # Filter devices to only target network
         target_network_base = ".".join(target_network.split("/")[0].split(".")[:3])
@@ -506,6 +517,16 @@ def generate_network_map_mermaid(network_map: Dict[str, Any]) -> str:
         # Helper function to get icon for device type
         def get_icon(device_type):
             return type_icons.get(device_type, "📱")
+
+        # First, identify all Tasmota devices (they should be shown even if not powering anything)
+        for device_id, device in configured_devices.items():
+            device_type = device.get("type", "other")
+            if device_type == "tasmota_device":
+                ip = device.get("ip", "")
+                if ip:
+                    device_network_base = ".".join(ip.split(".")[:3])
+                    if device_network_base == target_network_base:
+                        all_tasmota_devices[device_id] = device
 
         # Process online devices first
         online_devices = []
@@ -541,100 +562,432 @@ def generate_network_map_mermaid(network_map: Dict[str, Any]) -> str:
 
             offline_devices.append((device_id, device))
 
-        # Process online devices
+        # First, add all Tasmota devices (they're power sources, show them first)
+        for device_id, device in all_tasmota_devices.items():
+            if device.get("status") != "online":
+                continue
+            friendly_name = device.get("friendly_name") or device.get("name", device_id)
+            ip = device.get("ip", "")
+            power_state = device.get("tasmota_power_state", "")
+            power_watts = device.get("tasmota_power_watts")
+            
+            tasmota_clean_name = friendly_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
+            if len(tasmota_clean_name) > 20:
+                tasmota_clean_name = tasmota_clean_name[:17] + "..."
+            
+            # Add power state to label
+            power_indicator = ""
+            if power_state:
+                power_indicator = f"<br/>{'🟢 ON' if power_state.lower() == 'on' else '🔴 OFF'}"
+                if power_watts is not None:
+                    power_indicator += f" {power_watts}W"
+            
+            tasmota_label = f'"🔌 {tasmota_clean_name}<br/>{ip}{power_indicator}"'
+            tasmota_node_id = f"T_{device_id.replace('-', '_').replace('.', '_').replace('/', '_')}"
+            tasmota_nodes[tasmota_node_id] = {"label": tasmota_label, "device_id": device_id}
+            device_id_to_node_id[device_id] = tasmota_node_id
+            lines.append(f"            {tasmota_node_id}({tasmota_label}):::tasmota_device")
+        
+        # Close PowerSwitches subgraph
+        lines.append("        end")
+        
+        # Separate devices into test equipment and regular devices
+        test_equipment_online = []
+        regular_devices_online = []
+        
         for device_id, device in online_devices:
             device_type = device.get("type", "other")
-            friendly_name = device.get("friendly_name") or device.get("name", device_id)
-            ip = device.get("ip", "")
+            # Skip Tasmota devices (already added above)
+            if device_type == "tasmota_device":
+                continue
+            
+            if device_type == "test_equipment":
+                test_equipment_online.append((device_id, device))
+            else:
+                regular_devices_online.append((device_id, device))
+        
+        # Start Test Equipment subgraph
+        if test_equipment_online:
+            lines.append('        subgraph TestEquipment["🔬 Test Equipment"]')
+            
+            # Track equipment type counts for indexing
+            equipment_type_counts = {}
+            
+            for idx, (device_id, device) in enumerate(test_equipment_online, 1):
+                device_type = device.get("type", "other")
+                equipment_type = device.get("equipment_type", "test_equipment")
+                ip = device.get("ip", "")
+                
+                # Create friendly name: equipment_type + index
+                # Capitalize equipment_type for display (e.g., "dmm" -> "DMM", "oscilloscope" -> "Oscilloscope")
+                equipment_type_lower = equipment_type.lower()
+                if equipment_type_lower == "dmm":
+                    equipment_type_display = "DMM"
+                elif equipment_type_lower == "oscilloscope":
+                    equipment_type_display = "Oscilloscope"
+                elif equipment_type_lower == "power_supply":
+                    equipment_type_display = "Power Supply"
+                else:
+                    equipment_type_display = equipment_type.replace("_", " ").title()
+                
+                # Count equipment of this type for indexing
+                if equipment_type not in equipment_type_counts:
+                    equipment_type_counts[equipment_type] = 0
+                equipment_type_counts[equipment_type] += 1
+                equipment_index = equipment_type_counts[equipment_type]
+                
+                # Friendly name format: "DMM-1", "Oscilloscope-1", etc.
+                friendly_name = f"{equipment_type_display}-{equipment_index}"
+                
+                # Clean friendly name for Mermaid
+                clean_friendly_name = friendly_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
 
-            # Clean name for Mermaid
-            clean_name = friendly_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
-            if len(clean_name) > 25:
-                clean_name = clean_name[:22] + "..."
+                icon = get_icon(device_type)
+                # Show equipment type and IP
+                node_label = f'"{icon} {clean_friendly_name}<br/>{equipment_type_display}<br/>{ip}"'
 
-            icon = get_icon(device_type)
-            node_label = f'"{icon} {clean_name}<br/>📍 {ip}"'
+                node_id = f"D_{device_id.replace('-', '_').replace('.', '_').replace('/', '_')}"
+                device_nodes[node_id] = {"type": device_type, "device_id": device_id}
+                device_id_to_node_id[device_id] = node_id
 
-            node_id = f"D_{device_id.replace('-', '_').replace('.', '_').replace('/', '_')}"
-            device_nodes[node_id] = {"type": device_type, "device_id": device_id}
+                # Check for power switch relationship
+                power_switch = device.get("power_switch")
+                power_switch_id = None
+                if power_switch:
+                    if isinstance(power_switch, dict):
+                        power_switch_id = power_switch.get("device_id")
+                    else:
+                        power_switch_id = power_switch
+                        
+                if power_switch_id:
+                    if power_switch_id in device_id_to_node_id:
+                        tasmota_node_id = device_id_to_node_id[power_switch_id]
+                        if tasmota_node_id in tasmota_nodes:
+                            power_connections.append((tasmota_node_id, node_id))
+                    elif power_switch_id in devices_config:
+                        switch_info = devices_config[power_switch_id]
+                        tasmota_ip = switch_info.get("ip", "")
+                        if tasmota_ip:
+                            switch_network_base = ".".join(tasmota_ip.split(".")[:3])
+                            if switch_network_base == target_network_base:
+                                tasmota_name = switch_info.get("friendly_name") or switch_info.get(
+                                    "name", power_switch_id
+                                )
+                                if tasmota_node_id not in tasmota_nodes:
+                                    tasmota_clean_name = (
+                                        tasmota_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
+                                    )
+                                    if len(tasmota_clean_name) > 20:
+                                        tasmota_clean_name = tasmota_clean_name[:17] + "..."
+                                    tasmota_label = f'"🔌 {tasmota_clean_name}<br/>{tasmota_ip}"'
+                                    tasmota_nodes[tasmota_node_id] = {"label": tasmota_label, "device_id": power_switch_id}
+                                    device_id_to_node_id[power_switch_id] = tasmota_node_id
+                                    lines.append(f"            {tasmota_node_id}({tasmota_label}):::tasmota_device")
+                                power_connections.append((tasmota_node_id, node_id))
 
-            # Check for power switch
-            power_switch_id = device.get("power_switch")
-            if power_switch_id and power_switch_id in devices_config:
-                switch_info = devices_config[power_switch_id]
-                tasmota_ip = switch_info.get("ip", "")
-                if tasmota_ip:
-                    switch_network_base = ".".join(tasmota_ip.split(".")[:3])
-                    if switch_network_base == target_network_base:
-                        tasmota_name = switch_info.get("friendly_name") or switch_info.get(
-                            "name", power_switch_id
-                        )
-                        tasmota_node_id = f"T_{power_switch_id.replace('-', '_').replace('.', '_').replace('/', '_')}"
+                lines.append(f"            {node_id}({node_label}):::online")
+            
+            lines.append("        end")
+        
+        # Start Devices subgraph
+        lines.append('        subgraph Devices["📱 Devices"]')
 
-                        # Add Tasmota node if not already added
-                        if tasmota_node_id not in tasmota_nodes:
-                            tasmota_clean_name = (
-                                tasmota_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
-                            )
-                            if len(tasmota_clean_name) > 25:
-                                tasmota_clean_name = tasmota_clean_name[:22] + "..."
-                            tasmota_label = f'"🔌 {tasmota_clean_name}<br/>📍 {tasmota_ip}"'
-                            tasmota_nodes[tasmota_node_id] = tasmota_label
-                            lines.append(f"        {tasmota_node_id}[{tasmota_label}]:::tasmota")
-
-                        power_connections.append((tasmota_node_id, node_id))
-
-            lines.append(f"        {node_id}[{node_label}]:::{device_type}")
-
-        # Process offline devices (limit to 15 for readability)
-        for device_id, device in offline_devices[:15]:
+        # Process regular online devices (non-Tasmota, non-test-equipment)
+        for device_id, device in regular_devices_online:
             device_type = device.get("type", "other")
             friendly_name = device.get("friendly_name") or device.get("name", device_id)
+            hostname = device.get("hostname") or friendly_name
             ip = device.get("ip", "")
 
-            clean_name = friendly_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
-            if len(clean_name) > 25:
-                clean_name = clean_name[:22] + "..."
+            # Check if this is a gateway/router (unifi or .1 address)
+            is_gateway = False
+            if "unifi" in hostname.lower() or ip.endswith(".1"):
+                device_type = "network_infrastructure"
+                is_gateway = True
+
+            # Use full hostname, don't truncate
+            clean_hostname = hostname.replace('"', "'").replace("\n", " ").replace("\r", " ")
 
             icon = get_icon(device_type)
-            node_label = f'"{icon} {clean_name}<br/>📍 {ip}<br/>❌ OFFLINE"'
+            
+            # Build node label with additional information
+            node_label_parts = [f"{icon} {clean_hostname}", ip]
+            
+            # Add gateway indicator if applicable
+            if is_gateway:
+                node_label_parts.insert(1, "🌐 Gateway")
+            
+            # Add more information for device at 192.168.2.10
+            if ip == "192.168.2.10":
+                # Add any available device information
+                device_info_parts = []
+                
+                # Add manufacturer/model if available
+                manufacturer = device.get("manufacturer")
+                model = device.get("model")
+                if manufacturer:
+                    device_info_parts.append(f"Mfr: {manufacturer}")
+                if model:
+                    device_info_parts.append(f"Model: {model}")
+                
+                # Add device type if available and not already shown
+                if device_type and device_type != "other" and not manufacturer:
+                    device_info_parts.append(f"Type: {device_type.replace('_', ' ').title()}")
+                
+                # Add description if available
+                description = device.get("description")
+                if description:
+                    device_info_parts.append(f"Desc: {description[:25]}")
+                
+                # Add firmware version if available
+                firmware = device.get("firmware")
+                if firmware:
+                    device_info_parts.append(f"FW: {firmware[:20]}")
+                
+                # Add SSH status if available
+                ssh_error = device.get("ssh_error")
+                ssh_status = device.get("ssh_status")
+                if not ssh_status:
+                    # Derive ssh_status from ssh_error
+                    if ssh_error:
+                        ssh_status = "error"
+                    else:
+                        ssh_status = "ok"
+                if ssh_status:
+                    ssh_status_icon = "✓" if ssh_status == "ok" else "✗"
+                    device_info_parts.append(f"SSH: {ssh_status_icon}")
+                
+                # Add latency if available
+                latency = device.get("latency_ms")
+                if latency is not None:
+                    device_info_parts.append(f"Ping: {latency}ms")
+                
+                # Add last seen if available
+                last_seen = device.get("last_seen")
+                if last_seen:
+                    device_info_parts.append(f"Seen: {last_seen}")
+                
+                # Add any additional info
+                if device_info_parts:
+                    node_label_parts.extend(device_info_parts)
+            
+            # Join all parts with <br/> and wrap in quotes
+            node_label = f'"{"<br/>".join(node_label_parts)}"'
 
             node_id = f"D_{device_id.replace('-', '_').replace('.', '_').replace('/', '_')}"
             device_nodes[node_id] = {"type": device_type, "device_id": device_id}
+            device_id_to_node_id[device_id] = node_id
 
-            # Check for power switch
-            power_switch_id = device.get("power_switch")
-            if power_switch_id and power_switch_id in devices_config:
-                switch_info = devices_config[power_switch_id]
-                tasmota_ip = switch_info.get("ip", "")
-                if tasmota_ip:
-                    switch_network_base = ".".join(tasmota_ip.split(".")[:3])
-                    if switch_network_base == target_network_base:
-                        tasmota_name = switch_info.get("friendly_name") or switch_info.get(
-                            "name", power_switch_id
-                        )
-                        tasmota_node_id = f"T_{power_switch_id.replace('-', '_').replace('.', '_').replace('/', '_')}"
-
-                        if tasmota_node_id not in tasmota_nodes:
-                            tasmota_clean_name = (
-                                tasmota_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
-                            )
-                            if len(tasmota_clean_name) > 25:
-                                tasmota_clean_name = tasmota_clean_name[:22] + "..."
-                            tasmota_label = f'"🔌 {tasmota_clean_name}<br/>📍 {tasmota_ip}"'
-                            tasmota_nodes[tasmota_node_id] = tasmota_label
-                            lines.append(f"        {tasmota_node_id}[{tasmota_label}]:::tasmota")
-
+            # Check for power switch relationship
+            power_switch = device.get("power_switch")
+            power_switch_id = None
+            if power_switch:
+                # Handle both dict format (from list_devices) and string format (from config)
+                if isinstance(power_switch, dict):
+                    power_switch_id = power_switch.get("device_id")
+                else:
+                    power_switch_id = power_switch
+                    
+            if power_switch_id:
+                # Try to find the Tasmota node using device_id mapping
+                if power_switch_id in device_id_to_node_id:
+                    tasmota_node_id = device_id_to_node_id[power_switch_id]
+                    if tasmota_node_id in tasmota_nodes:
                         power_connections.append((tasmota_node_id, node_id))
+                # Also check in devices_config as fallback
+                elif power_switch_id in devices_config:
+                    switch_info = devices_config[power_switch_id]
+                    tasmota_ip = switch_info.get("ip", "")
+                    if tasmota_ip:
+                        switch_network_base = ".".join(tasmota_ip.split(".")[:3])
+                        if switch_network_base == target_network_base:
+                            tasmota_name = switch_info.get("friendly_name") or switch_info.get(
+                                "name", power_switch_id
+                            )
+                            # Add Tasmota node if not already added
+                            if tasmota_node_id not in tasmota_nodes:
+                                tasmota_clean_name = (
+                                    tasmota_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
+                                )
+                                if len(tasmota_clean_name) > 20:
+                                    tasmota_clean_name = tasmota_clean_name[:17] + "..."
+                                tasmota_label = f'"🔌 {tasmota_clean_name}<br/>{tasmota_ip}"'
+                                tasmota_nodes[tasmota_node_id] = {"label": tasmota_label, "device_id": power_switch_id}
+                                device_id_to_node_id[power_switch_id] = tasmota_node_id
+                                lines.append(f"            {tasmota_node_id}({tasmota_label}):::tasmota_device")
+                            power_connections.append((tasmota_node_id, node_id))
 
-            lines.append(f"        {node_id}[{node_label}]:::offline")
+            # Use network_infrastructure styling for gateway devices
+            if is_gateway:
+                lines.append(f"            {node_id}({node_label}):::network_infrastructure")
+            else:
+                lines.append(f"            {node_id}({node_label}):::online")
+        
+        # Separate offline devices into test equipment and regular devices
+        test_equipment_offline = []
+        regular_devices_offline = []
+        
+        for device_id, device in offline_devices[:15]:
+            device_type = device.get("type", "other")
+            # Skip Tasmota devices (already added above)
+            if device_type == "tasmota_device":
+                continue
+            
+            if device_type == "test_equipment":
+                test_equipment_offline.append((device_id, device))
+            else:
+                regular_devices_offline.append((device_id, device))
+        
+        # Process offline test equipment in separate subgraph
+        if test_equipment_offline:
+            # Close Devices subgraph first
+            lines.append("        end")
+            # Start Test Equipment Offline subgraph
+            lines.append('        subgraph TestEquipmentOffline["🔬 Test Equipment (Offline)"]')
+            
+            # Track equipment type counts for offline equipment indexing
+            equipment_type_counts_offline = {}
+            
+            for device_id, device in test_equipment_offline:
+                device_type = device.get("type", "other")
+                equipment_type = device.get("equipment_type", "test_equipment")
+                ip = device.get("ip", "")
+                
+                # Create friendly name: equipment_type + index
+                # Capitalize equipment_type for display (e.g., "dmm" -> "DMM", "oscilloscope" -> "Oscilloscope")
+                equipment_type_lower = equipment_type.lower()
+                if equipment_type_lower == "dmm":
+                    equipment_type_display = "DMM"
+                elif equipment_type_lower == "oscilloscope":
+                    equipment_type_display = "Oscilloscope"
+                elif equipment_type_lower == "power_supply":
+                    equipment_type_display = "Power Supply"
+                else:
+                    equipment_type_display = equipment_type.replace("_", " ").title()
+                
+                # Count equipment of this type for indexing
+                if equipment_type not in equipment_type_counts_offline:
+                    equipment_type_counts_offline[equipment_type] = 0
+                equipment_type_counts_offline[equipment_type] += 1
+                equipment_index = equipment_type_counts_offline[equipment_type]
+                
+                # Friendly name format: "DMM-1", "Oscilloscope-1", etc.
+                friendly_name = f"{equipment_type_display}-{equipment_index}"
+                
+                # Clean friendly name for Mermaid
+                clean_friendly_name = friendly_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
+
+                icon = get_icon(device_type)
+                # Show equipment type and IP
+                node_label = f'"{icon} {clean_friendly_name}<br/>{equipment_type_display}<br/>{ip}<br/>❌ OFFLINE"'
+
+                node_id = f"D_{device_id.replace('-', '_').replace('.', '_').replace('/', '_')}"
+                device_nodes[node_id] = {"type": device_type, "device_id": device_id}
+                device_id_to_node_id[device_id] = node_id
+
+                # Check for power switch relationship (same logic as online devices)
+                power_switch = device.get("power_switch")
+                power_switch_id = None
+                if power_switch:
+                    if isinstance(power_switch, dict):
+                        power_switch_id = power_switch.get("device_id")
+                    else:
+                        power_switch_id = power_switch
+                        
+                if power_switch_id:
+                    if power_switch_id in device_id_to_node_id:
+                        tasmota_node_id = device_id_to_node_id[power_switch_id]
+                        if tasmota_node_id in tasmota_nodes:
+                            power_connections.append((tasmota_node_id, node_id))
+                    elif power_switch_id in devices_config:
+                        switch_info = devices_config[power_switch_id]
+                        tasmota_ip = switch_info.get("ip", "")
+                        if tasmota_ip:
+                            switch_network_base = ".".join(tasmota_ip.split(".")[:3])
+                            if switch_network_base == target_network_base:
+                                tasmota_name = switch_info.get("friendly_name") or switch_info.get(
+                                    "name", power_switch_id
+                                )
+                                if tasmota_node_id not in tasmota_nodes:
+                                    tasmota_clean_name = (
+                                        tasmota_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
+                                    )
+                                    if len(tasmota_clean_name) > 20:
+                                        tasmota_clean_name = tasmota_clean_name[:17] + "..."
+                                    tasmota_label = f'"🔌 {tasmota_clean_name}<br/>{tasmota_ip}"'
+                                    tasmota_nodes[tasmota_node_id] = {"label": tasmota_label, "device_id": power_switch_id}
+                                    device_id_to_node_id[power_switch_id] = tasmota_node_id
+                                    lines.append(f"            {tasmota_node_id}({tasmota_label}):::tasmota_device")
+                                power_connections.append((tasmota_node_id, node_id))
+
+                lines.append(f"            {node_id}({node_label}):::offline")
+            
+            lines.append("        end")
+            # Reopen Devices subgraph for regular offline devices
+            lines.append('        subgraph DevicesOffline["📱 Devices (Offline)"]')
+        
+        # Process regular offline devices
+        for device_id, device in regular_devices_offline:
+            device_type = device.get("type", "other")
+            friendly_name = device.get("friendly_name") or device.get("name", device_id)
+            hostname = device.get("hostname") or friendly_name
+            ip = device.get("ip", "")
+
+            # Use full hostname, don't truncate
+            clean_hostname = hostname.replace('"', "'").replace("\n", " ").replace("\r", " ")
+
+            icon = get_icon(device_type)
+            node_label = f'"{icon} {clean_hostname}<br/>{ip}<br/>❌ OFFLINE"'
+
+            node_id = f"D_{device_id.replace('-', '_').replace('.', '_').replace('/', '_')}"
+            device_nodes[node_id] = {"type": device_type, "device_id": device_id}
+            device_id_to_node_id[device_id] = node_id
+
+            # Check for power switch relationship (same logic as online devices)
+            power_switch = device.get("power_switch")
+            power_switch_id = None
+            if power_switch:
+                if isinstance(power_switch, dict):
+                    power_switch_id = power_switch.get("device_id")
+                else:
+                    power_switch_id = power_switch
+                    
+            if power_switch_id:
+                if power_switch_id in device_id_to_node_id:
+                    tasmota_node_id = device_id_to_node_id[power_switch_id]
+                    if tasmota_node_id in tasmota_nodes:
+                        power_connections.append((tasmota_node_id, node_id))
+                elif power_switch_id in devices_config:
+                    switch_info = devices_config[power_switch_id]
+                    tasmota_ip = switch_info.get("ip", "")
+                    if tasmota_ip:
+                        switch_network_base = ".".join(tasmota_ip.split(".")[:3])
+                        if switch_network_base == target_network_base:
+                            tasmota_name = switch_info.get("friendly_name") or switch_info.get(
+                                "name", power_switch_id
+                            )
+                            if tasmota_node_id not in tasmota_nodes:
+                                tasmota_clean_name = (
+                                    tasmota_name.replace('"', "'").replace("\n", " ").replace("\r", " ")
+                                )
+                                if len(tasmota_clean_name) > 20:
+                                    tasmota_clean_name = tasmota_clean_name[:17] + "..."
+                                tasmota_label = f'"🔌 {tasmota_clean_name}<br/>{tasmota_ip}"'
+                                tasmota_nodes[tasmota_node_id] = {"label": tasmota_label, "device_id": power_switch_id}
+                                device_id_to_node_id[power_switch_id] = tasmota_node_id
+                                lines.append(f"            {tasmota_node_id}({tasmota_label}):::tasmota_device")
+                            power_connections.append((tasmota_node_id, node_id))
+
+            lines.append(f"            {node_id}({node_label}):::offline")
 
         if len(offline_devices) > 15:
             lines.append(
-                f'        OfflineMore["... and {len(offline_devices) - 15} more offline"]:::offline'
+                f'            OfflineMore("... and {len(offline_devices) - 15} more offline"):::offline'
             )
+        
+        lines.append("        end")
 
-        # Add power connections
+        # Add power connections with better styling
         for tasmota_id, device_id in power_connections:
             # Check if device is offline by looking up its status
             device_status = "online"  # default
@@ -643,25 +996,28 @@ def generate_network_map_mermaid(network_map: Dict[str, Any]) -> str:
                 device_status = configured_devices[device_lookup_id].get("status", "offline")
 
             # Use solid line for online, dashed for offline
+            # Use thicker, colored lines for power connections
+            # Connect from PowerSwitches subgraph to Devices subgraph
             if device_status == "offline":
                 lines.append(f'        {tasmota_id} -.->|"⚡ Powers"| {device_id}')
             else:
-                lines.append(f'        {tasmota_id} -->|"⚡ Powers"| {device_id}')
+                lines.append(f'        {tasmota_id} ==>|"⚡ Powers"| {device_id}')
 
         lines.append("    end")
 
         # Add legend/key
         lines.append("")
         lines.append('    subgraph Legend["📋 Legend"]')
-        lines.append('        L1["💻 Development Boards"]:::development_board')
-        lines.append('        L2["🔬 Test Equipment"]:::test_equipment')
-        lines.append('        L3["🔌 Tasmota Power Switches"]:::tasmota_device')
-        lines.append('        L4["🖥️ Servers"]:::server')
-        lines.append('        L5["🌐 Network Infrastructure"]:::network_infrastructure')
-        lines.append('        L6["⚙️ Embedded Controllers"]:::embedded_controllers')
-        lines.append('        L7["📱 Other Devices"]:::other')
-        lines.append('        L8["❌ Offline Devices"]:::offline')
-        lines.append('        L9["⚡ Power Connection"]:::power_line')
+        lines.append('        L1("💻 Development Boards"):::development_board')
+        lines.append('        L2("🔬 Test Equipment"):::test_equipment')
+        lines.append('        L3("🔌 Tasmota Power Switches"):::tasmota_device')
+        lines.append('        L4("🖥️ Servers"):::server')
+        lines.append('        L5("🌐 Network Infrastructure"):::network_infrastructure')
+        lines.append('        L6("⚙️ Embedded Controllers"):::embedded_controllers')
+        lines.append('        L7("📱 Other Devices"):::other')
+        lines.append('        L8("🟢 Online Devices"):::online')
+        lines.append('        L9("❌ Offline Devices"):::offline')
+        lines.append('        L10("⚡ Power Connection"):::power_line')
         lines.append("    end")
 
         # Add styling with better colors
@@ -684,9 +1040,15 @@ def generate_network_map_mermaid(network_map: Dict[str, Any]) -> str:
         )
         lines.append("    classDef other fill:#D3D3D3,stroke:#808080,stroke-width:2px,color:#000")
         lines.append(
+            "    classDef online fill:#90EE90,stroke:#228B22,stroke-width:3px,color:#000"
+        )
+        lines.append(
             "    classDef offline fill:#FFB6B6,stroke:#FF0000,stroke-width:2px,stroke-dasharray: 5 5,color:#000"
         )
-        lines.append("    classDef power_line stroke:#FFD700,stroke-width:3px")
+        lines.append("    classDef power_line stroke:#FFD700,stroke-width:4px")
+        
+        # Add link styling for power connections (thicker, golden color)
+        lines.append("    linkStyle default stroke:#FFD700,stroke-width:3px")
 
         lines.append("```")
 
@@ -695,6 +1057,101 @@ def generate_network_map_mermaid(network_map: Dict[str, Any]) -> str:
     except Exception as e:
         logger.error(f"Error generating Mermaid diagram: {e}", exc_info=True)
         return f'```mermaid\ngraph TD\n    Error["❌ Error generating diagram: {e!s}"]\n```'
+
+
+def convert_mermaid_to_png(mermaid_diagram: str, output_path: Optional[Path] = None) -> Optional[str]:
+    """
+    Convert a Mermaid diagram to PNG image.
+    
+    Args:
+        mermaid_diagram: Mermaid diagram text (with or without ```mermaid code blocks)
+        output_path: Optional path to save the image. If None, returns base64 encoded image.
+    
+    Returns:
+        Base64 encoded image string if output_path is None, otherwise None
+    """
+    import tempfile
+    
+    # Extract mermaid content if wrapped in code blocks
+    mermaid_content = mermaid_diagram
+    if mermaid_diagram.startswith("```mermaid"):
+        # Remove code block markers
+        lines = mermaid_diagram.split("\n")
+        mermaid_content = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
+    elif mermaid_diagram.startswith("```"):
+        # Generic code block
+        lines = mermaid_diagram.split("\n")
+        mermaid_content = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
+    
+    # Try to use mermaid-cli (mmdc) if available
+    try:
+        # Check if mmdc is available
+        result = subprocess.run(
+            ["which", "mmdc"],
+            capture_output=True,
+            timeout=2,
+        )
+        if result.returncode != 0:
+            # Try npm mermaid-cli
+            result = subprocess.run(
+                ["which", "mermaid"],
+                capture_output=True,
+                timeout=2,
+            )
+            if result.returncode != 0:
+                logger.debug("mermaid-cli not found, skipping Mermaid-to-PNG conversion")
+                return None
+        
+        # Use mmdc to convert Mermaid to PNG
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mmd", delete=False) as mermaid_file:
+            mermaid_file.write(mermaid_content)
+            mermaid_file_path = mermaid_file.name
+        
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as png_file:
+            png_file_path = png_file.name
+        
+        try:
+            # Try mmdc first with higher resolution for better detail visibility
+            # Use width of 2400px (2x default) for better zoom/clarity
+            # Use white background instead of transparent
+            cmd = ["mmdc", "-i", mermaid_file_path, "-o", png_file_path, "-b", "white", "-w", "2400"]
+            result = subprocess.run(cmd, capture_output=True, timeout=30)
+            
+            if result.returncode != 0:
+                # Try mermaid command
+                cmd = ["mermaid", mermaid_file_path, "-o", str(Path(png_file_path).parent), "-f", "png"]
+                result = subprocess.run(cmd, capture_output=True, timeout=30)
+            
+            if result.returncode == 0 and Path(png_file_path).exists():
+                # Read PNG and convert to base64
+                with open(png_file_path, "rb") as f:
+                    png_data = f.read()
+                
+                if output_path:
+                    Path(output_path).write_bytes(png_data)
+                    return None
+                else:
+                    return base64.b64encode(png_data).decode("utf-8")
+            else:
+                logger.warning(f"mermaid-cli conversion failed: {result.stderr.decode()}")
+                return None
+        finally:
+            # Cleanup temp files
+            try:
+                Path(mermaid_file_path).unlink(missing_ok=True)
+                Path(png_file_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+    
+    except FileNotFoundError:
+        logger.debug("mermaid-cli not found, skipping Mermaid-to-PNG conversion")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("mermaid-cli conversion timed out")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to convert Mermaid to PNG: {e}")
+        return None
 
 
 def generate_network_map_image(

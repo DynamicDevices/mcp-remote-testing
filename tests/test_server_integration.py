@@ -340,6 +340,7 @@ class TestToolHandlers:
             assert result[0].type == "text"
             # Error is returned as JSON in TextContent
             import json
+
             error_data = json.loads(result[0].text)
             assert "error" in error_data
             assert "Test error" in error_data["error"]

@@ -140,6 +140,37 @@ def get_target_network() -> str:
     return DEFAULT_TARGET_NETWORK
 
 
+def get_target_network_friendly_name() -> str:
+    """
+    Get the friendly name for the target network.
+
+    Priority:
+    1. Value from lab_devices.json config file (if exists)
+    2. Default: "Hardware Lab"
+
+    Returns:
+        Friendly name string (e.g., "Hardware Lab")
+    """
+    # Check config file
+    try:
+        if LAB_DEVICES_JSON.exists():
+            import json
+
+            with open(LAB_DEVICES_JSON) as f:
+                config = json.load(f)
+                infrastructure = config.get("lab_infrastructure", {})
+                network_access = infrastructure.get("network_access", {})
+                friendly_name = network_access.get("friendly_name")
+                if friendly_name:
+                    return friendly_name
+    except Exception:
+        # If config read fails, fall back to default
+        pass
+
+    # Default friendly name
+    return "Hardware Lab"
+
+
 def get_lab_networks() -> List[str]:
     """
     Get list of lab networks for scanning.

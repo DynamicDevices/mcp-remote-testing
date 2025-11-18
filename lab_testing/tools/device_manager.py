@@ -41,6 +41,7 @@ def _create_default_config(config_path: Path) -> Dict[str, Any]:
             },
             "network_access": {
                 "target_network": "192.168.2.0/24",
+                "friendly_name": "Hardware Lab",
                 "lab_networks": ["192.168.2.0/24"],
                 "primary_method": "wireguard_vpn",
             },
@@ -83,10 +84,10 @@ def load_device_config() -> Dict[str, Any]:
 def _get_ssh_status(device: Dict[str, Any]) -> str:
     """
     Determine SSH status for a device.
-    
+
     Args:
         device: Device dictionary
-        
+
     Returns:
         SSH status string: "ok", "error", "refused", or "unknown"
     """
@@ -97,10 +98,9 @@ def _get_ssh_status(device: Dict[str, Any]) -> str:
     if ssh_error:
         if "refused" in ssh_error.lower() or ssh_error_type == "refused":
             return "refused"
-        elif ssh_error_type == "timeout":
+        if ssh_error_type == "timeout":
             return "timeout"
-        else:
-            return "error"
+        return "error"
     return "unknown"
 
 
@@ -611,9 +611,7 @@ def list_devices(
         if ssh_status_filter:
             ssh_status_filter_lower = ssh_status_filter.lower()
             filtered_list = [
-                d
-                for d in filtered_list
-                if _get_ssh_status(d).lower() == ssh_status_filter_lower
+                d for d in filtered_list if _get_ssh_status(d).lower() == ssh_status_filter_lower
             ]
 
         # Filter by power state (for Tasmota devices)
@@ -660,7 +658,7 @@ def list_devices(
     # Apply sorting if requested
     if sort_by:
         import ipaddress
-        
+
         def _get_sort_key(device: Dict[str, Any]) -> Any:
             """Get sort key for a device based on sort_by field"""
             if sort_by == "ip":
@@ -677,27 +675,27 @@ def list_devices(
                 # Extract numeric value from "Xs ago", "Xm ago", "Xh ago", "Xd ago", or "Unknown"
                 last_seen = device.get("last_seen", "Unknown")
                 if last_seen == "Unknown":
-                    return float('inf')  # Put Unknown at the end
+                    return float("inf")  # Put Unknown at the end
                 try:
                     # Parse "Xs ago", "Xm ago", etc.
                     if last_seen.endswith("s ago"):
                         return int(last_seen.replace("s ago", ""))
-                    elif last_seen.endswith("m ago"):
+                    if last_seen.endswith("m ago"):
                         return int(last_seen.replace("m ago", "")) * 60
-                    elif last_seen.endswith("h ago"):
+                    if last_seen.endswith("h ago"):
                         return int(last_seen.replace("h ago", "")) * 3600
-                    elif last_seen.endswith("d ago"):
+                    if last_seen.endswith("d ago"):
                         return int(last_seen.replace("d ago", "")) * 86400
                 except:
-                    return float('inf')
-                return float('inf')
+                    return float("inf")
+                return float("inf")
             else:
                 # Default: sort by IP
                 try:
                     return ipaddress.IPv4Address(device.get("ip", "0.0.0.0"))
                 except:
                     return device.get("ip", "")
-        
+
         # Sort each device list
         for device_type, device_list in filtered_devices_by_type.items():
             reverse = sort_order.lower() == "desc"
@@ -720,10 +718,10 @@ def list_devices(
             for device in device_list:
                 device["_type"] = device_type
                 all_devices_flat.append(device)
-        
+
         # Apply limit
         all_devices_flat = all_devices_flat[:limit]
-        
+
         # Regroup by type
         filtered_devices_by_type = {}
         for device in all_devices_flat:

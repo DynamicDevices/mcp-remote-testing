@@ -48,12 +48,6 @@ from lab_testing.tools.device_verification import (
     verify_device_by_ip,
     verify_device_identity,
 )
-from lab_testing.tools.network_mapper import (
-    create_network_map,
-    generate_network_map_image,
-    generate_network_map_mermaid,
-    generate_network_map_visualization,
-)
 from lab_testing.tools.ota_manager import (
     check_ota_status,
     deploy_container,
@@ -793,9 +787,17 @@ def handle_tool(
             quick_mode = arguments.get("quick_mode", False)
 
             # Get target network for display
-            from lab_testing.config import get_target_network
+            from lab_testing.config import get_target_network, get_target_network_friendly_name
+            from lab_testing.tools.network_mapper import (
+                convert_mermaid_to_png,
+                create_network_map,
+                generate_network_map_image,
+                generate_network_map_mermaid,
+                generate_network_map_visualization,
+            )
 
             target_network = get_target_network()
+            network_friendly_name = get_target_network_friendly_name()
 
             # Log the operation with target network info
             mode_info = "Quick mode (no network scan)" if quick_mode else "Full scan mode"
@@ -808,40 +810,94 @@ def handle_tool(
                 networks, scan_networks, test_configured_devices, max_hosts, quick_mode
             )
 
-            # Generate PNG image visualization (primary)
-            image_base64 = generate_network_map_image(network_map, output_path=None)
-
-            # Generate Mermaid diagram (as fallback/text representation)
+            # Generate Mermaid diagram (primary)
             mermaid_diagram = generate_network_map_mermaid(network_map)
+
+            # Convert Mermaid diagram to PNG
+            mermaid_png_base64 = convert_mermaid_to_png(mermaid_diagram, output_path=None)
+            
+            # Generate matplotlib PNG image visualization (fallback)
+            image_base64 = generate_network_map_image(network_map, output_path=None)
 
             # Generate text visualization (for detailed info)
             visualization = generate_network_map_visualization(network_map, format="text")
 
             # Combine all visualizations in the result
             result = {
+                "success": True,
                 "network_map": network_map,
                 "visualization": visualization,
                 "mermaid_diagram": mermaid_diagram,
+                "mermaid_png_base64": mermaid_png_base64[:50] + "..." if mermaid_png_base64 else None,
                 "image_base64": image_base64[:50] + "..." if image_base64 else None,
             }
             _record_tool_result(name, result, request_id, start_time)
 
-            # Return PNG image as primary visualization
+            # Return Mermaid diagram as primary visualization
             contents = []
-            if image_base64:
+            if mermaid_diagram:
+                # Return Mermaid diagram as primary TextContent
+                contents.append(
+                    TextContent(type="text", text=mermaid_diagram)
+                )
+            
+            # Add PNG image from Mermaid conversion (preferred over matplotlib version)
+            png_to_use = mermaid_png_base64 if mermaid_png_base64 else image_base64
+            
+            # Add PNG image as fallback if available
+            # Try both ImageContent (MCP standard) and data URI in TextContent (for Cursor compatibility)
+            if png_to_use:
                 try:
-                    # Return image as ImageContent
+                    # Return image as ImageContent (MCP standard format)
+                    logger.info(f"[{request_id}] Creating ImageContent: data length={len(png_to_use)}, source={'mermaid' if mermaid_png_base64 else 'matplotlib'}")
+                    image_content = ImageContent(type="image", data=png_to_use, mimeType="image/png")
+                    contents.append(image_content)
+                    logger.info(f"[{request_id}] ImageContent created successfully")
+                    
+                    # Save high-resolution image to file for clickable link
+                    import base64
+                    import tempfile
+                    from pathlib import Path
+                    
+                    # Save to a file in the project directory for easy access
+                    project_root = Path(__file__).parent.parent.parent
+                    network_map_dir = project_root / "network_maps"
+                    network_map_dir.mkdir(exist_ok=True)
+                    
+                    # Create filename with timestamp
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    image_file = network_map_dir / f"network_map_{timestamp}.png"
+                    
+                    # Write the PNG data
+                    with open(image_file, "wb") as f:
+                        f.write(base64.b64decode(png_to_use))
+                    
+                    # Also add as data URI in TextContent for inline viewing
+                    data_uri = f"data:image/png;base64,{png_to_use}"
+                    # Provide both embedded image and clickable link
+                    # Use HTML anchor tag to make image clickable and enlargeable
+                    image_text = (
+                        f"\n\n"
+                        f'<a href="{data_uri}" target="_blank" title="Click to enlarge">'
+                        f'<img src="{data_uri}" alt="Network Map" style="max-width: 100%; cursor: pointer;" />'
+                        f'</a>\n\n'
+                        f"**Full-size image saved to:** `{image_file.relative_to(project_root)}`\n\n"
+                    )
                     contents.append(
-                        ImageContent(type="image", data=image_base64, mimeType="image/png")
+                        TextContent(
+                            type="text",
+                            text=image_text
+                        )
                     )
                 except Exception as e:
-                    logger.warning(f"Failed to create ImageContent: {e}, falling back to text")
+                    logger.error(f"[{request_id}] Failed to create ImageContent: {e}", exc_info=True)
                     # Fallback: save to temp file and include path
                     import base64
                     import tempfile
 
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-                        tmp.write(base64.b64decode(image_base64))
+                        tmp.write(base64.b64decode(png_to_use))
                         tmp_path = tmp.name
                     contents.append(
                         TextContent(
@@ -849,8 +905,9 @@ def handle_tool(
                             text=f"Network map image saved to: {tmp_path}\n\n{mermaid_diagram}",
                         )
                     )
-            else:
-                # Fallback to Mermaid if image generation failed
+            
+            # If no Mermaid diagram was added, add it as fallback
+            if not contents and mermaid_diagram:
                 contents.append(TextContent(type="text", text=mermaid_diagram))
 
             # Add summary as separate content with target network info
@@ -859,7 +916,7 @@ def handle_tool(
                 mode_info = "Quick mode (no network scan)" if quick_mode else "Full scan mode"
                 summary_text = (
                     f"\n\n---\n\n**Network Summary:**\n"
-                    f"- Target Network: {target_network}\n"
+                    f"- Network: {network_friendly_name} ({target_network})\n"
                     f"- Mode: {mode_info}\n"
                     f"- Total Devices: {summary.get('total_configured_devices', 0)}\n"
                     f"- Online: {summary.get('online_devices', 0)}\n"

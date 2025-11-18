@@ -11,3 +11,7 @@ numpy>=1.21.0
 # Note: sshpass is a system package, not a Python package
 # Install with: sudo apt install sshpass (or equivalent for your OS)
 
+# Optional: Mermaid CLI for better network map PNG generation
+# Install with: npm install -g @mermaid-js/mermaid-cli
+# Or install locally: npm install (requires package.json)
+

@@ -95,7 +95,7 @@ def get_help_content() -> Dict[str, Any]:
                 "4. Filter by SSH status: 'list_devices(ssh_status_filter=\"error\")' to find devices with SSH issues",
                 "5. Filter Tasmota by power: 'list_devices(power_state_filter=\"on\")' to find powered-on Tasmota devices",
                 "6. Search devices: 'list_devices(search_query=\"192.168.2.18\")'",
-                "7. Sort results: 'list_devices(sort_by=\"ip\", sort_order=\"asc\")' or 'list_devices(sort_by=\"last_seen\", sort_order=\"desc\")'",
+                '7. Sort results: \'list_devices(sort_by="ip", sort_order="asc")\' or \'list_devices(sort_by="last_seen", sort_order="desc")\'',
                 "8. Limit results: 'list_devices(limit=10)' to show only first 10 devices",
                 "9. Force refresh: 'list_devices(force_refresh=true)' to bypass cache and rescan",
                 "10. Use 'test_device' to verify connectivity",

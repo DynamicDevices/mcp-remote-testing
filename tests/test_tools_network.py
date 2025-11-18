@@ -21,7 +21,13 @@ class TestCreateNetworkMap:
     @patch("lab_testing.tools.network_mapper.ssh_to_device")
     @patch("lab_testing.tools.tasmota_control.get_power_switch_for_device")
     def test_create_network_map_with_devices(
-        self, mock_get_switch, mock_ssh, mock_test, mock_target_network, mock_config, sample_device_config
+        self,
+        mock_get_switch,
+        mock_ssh,
+        mock_test,
+        mock_target_network,
+        mock_config,
+        sample_device_config,
     ):
         """Test creating network map with configured devices"""
         with open(sample_device_config) as f:

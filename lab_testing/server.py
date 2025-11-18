@@ -68,7 +68,7 @@ except ImportError:
     pass  # dev_reload module not available
 
 # Initialize MCP server
-server = Server("ai-lab-testing-mcp")
+server = Server("ai-lab-testing")
 
 
 def _record_tool_result(name: str, result: Dict[str, Any], request_id: str, start_time: float):
