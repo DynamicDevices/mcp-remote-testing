@@ -119,7 +119,13 @@
 - ✅ Config template generation tested
 - ✅ Server config retrieval tested
 - ✅ Client config validation tested
-- ⚠️ Real device testing pending (ready for device testing)
+- ✅ Real device testing complete (see docs/P1_FOUNDRIES_VPN_DEVICE_TESTING.md)
+  - ✅ VPN status check
+  - ✅ Server config retrieval
+  - ✅ Device listing (4 devices found)
+  - ✅ VPN connection verification
+  - ✅ Enable/disable VPN functions verified
+  - ⚠️ SSH access via VPN IP pending (requires device IP addresses)
 
 ---
 
