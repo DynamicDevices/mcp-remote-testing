@@ -2,26 +2,45 @@
 
 ## SSH Connections
 
-**ALWAYS use SSH multiplexing (ControlMaster) for repeated SSH connections:**
+**CRITICAL: ALWAYS use sshpass for SSH connections that require password authentication:**
 
-1. **First connection** - Establish master:
+1. **ALWAYS use sshpass** when passwords are needed:
+   ```bash
+   sshpass -p 'password' ssh -o StrictHostKeyChecking=no user@host "command"
+   ```
+
+2. **SSH Multiplexing (ControlMaster)** - For repeated SSH connections:
+
+   **First connection** - Establish master:
    ```bash
    sshpass -p 'password' ssh -o ControlMaster=yes \
        -o ControlPath=~/.ssh/controlmasters/%h-%p-%r \
        -o ControlPersist=300 \
+       -o StrictHostKeyChecking=no \
        -p PORT user@host "command"
    ```
 
-2. **Subsequent connections** - Reuse master:
+   **Subsequent connections** - Reuse master:
    ```bash
    ssh -o ControlPath=~/.ssh/controlmasters/%h-%p-%r \
+       -o StrictHostKeyChecking=no \
        -p PORT user@host "command"
    ```
 
 3. **For WireGuard server** (proxmox.dynamicdevices.co.uk:5025):
    - Use multiplexing for all diagnostic commands
+   - Use sshpass for initial connection
    - Master connection persists for 5 minutes
    - No password needed after first connection
+
+4. **Default SSH users:**
+   - Foundries devices: `fio` (or `root` if fio unavailable)
+   - WireGuard server: `root`
+   - Hardware lab devices: Check device config or try `root`/`fio`
+
+5. **Common passwords:**
+   - Foundries devices: `fio` (default)
+   - WireGuard server: Check with user or use SSH keys when available
 
 ## Best Practices
 
@@ -29,3 +48,66 @@
 - Set ControlPersist to 300-600 seconds
 - Use unique ControlPath per host/port/user combination
 - Document SSH connection patterns in code comments
+
+## Pull Request Guidelines
+
+**ALWAYS follow these rules when creating or updating PRs:**
+
+1. **ALWAYS Create PRs as DRAFT:**
+   - **CRITICAL:** When creating a PR, it MUST be created as a DRAFT
+   - Use `--draft` flag with `gh pr create` or set `draft: true` via API
+   - **Only the user (ajlennon) is allowed to convert PRs from draft to ready/OPEN status**
+   - This prevents reviewers from being notified prematurely and avoids annoying them with incomplete work
+   - Even if the PR appears complete, create it as draft - let the user decide when it's ready for review
+
+2. **Cursor.AI Note:** Every PR description MUST include a note that it was generated with Cursor.AI assistance:
+   ```
+   ## Generated with Cursor.AI Assistance
+   
+   This PR and its changes were generated with the assistance of Cursor.AI for user ajlennon (Alex J Lennon, ajlennon@dynamicdevices.co.uk).
+   ```
+
+3. **Explicit Notification:** After creating or updating a PR, ALWAYS explicitly inform the user:
+   - PR number and URL
+   - Status (DRAFT/OPEN) - **emphasize if it's DRAFT and that user needs to convert it**
+   - What was updated
+   - That it includes the Cursor.AI note
+   - **Reminder:** "This PR is created as DRAFT - you can convert it to ready when you're satisfied"
+
+4. **Review Comments:** When updating PRs, review existing comments and address them if needed before updating the PR description.
+
+4. **CRITICAL: Comprehensive PR Review After Any Changes:**
+   **After making ANY changes to a PR (description, code, comments), you MUST:**
+   - Verify all claims in the PR description match the actual code implementation
+   - Check that code examples in the PR are accurate
+   - Verify that "Review Comments Addressed" sections accurately reflect what was fixed
+   - Ensure line numbers mentioned in PR are correct (if mentioned)
+   - Verify that all technical claims are accurate (e.g., "subnet is derived" → check code actually does this)
+   - Cross-reference PR description with actual code changes
+   - Test any code examples or logic described in the PR
+   - **This is CRITICAL** - incorrect PR descriptions mislead reviewers and damage trust
+
+## AI-Generated Content Disclosure
+
+**CRITICAL: ALL AI-generated content MUST include disclosure:**
+
+**When creating or responding to:**
+- Pull Requests (PRs)
+- Pull Request comments and reviews
+- Issue comments
+- Code reviews
+- Documentation
+- Any external communications (GitHub, GitLab, etc.)
+
+**ALWAYS include this note:**
+```
+*This [response/PR/comment] was made with the assistance of Cursor.AI for user ajlennon (Alex J Lennon, ajlennon@dynamicdevices.co.uk).*
+```
+
+**Format examples:**
+- PR descriptions: Add a section at the bottom
+- Comments: Add at the end of the comment
+- Code reviews: Include in review summary
+- Documentation: Add to author/credits section
+
+**This ensures transparency about AI assistance in all communications.**

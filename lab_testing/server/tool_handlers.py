@@ -62,21 +62,21 @@ from lab_testing.tools.file_transfer import (
     sync_directory_to_device,
 )
 from lab_testing.tools.foundries_vpn import (
+    check_client_peer_registered,
     check_foundries_vpn_client_config,
     connect_foundries_vpn,
     disable_foundries_vpn_device,
-    check_client_peer_registered,
     enable_foundries_device_to_device,
     enable_foundries_vpn_device,
     foundries_vpn_status,
     generate_foundries_vpn_client_config_template,
     get_foundries_vpn_server_config,
-    list_foundries_devices,
     manage_foundries_vpn_ip_cache,
     register_foundries_vpn_client,
     setup_foundries_vpn,
     verify_foundries_vpn_connection,
 )
+from lab_testing.tools.foundries_devices import list_foundries_devices
 from lab_testing.tools.ota_manager import (
     check_ota_status,
     deploy_container,

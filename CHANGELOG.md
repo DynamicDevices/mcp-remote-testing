@@ -2,6 +2,23 @@
 
 [Semantic Versioning](https://semver.org/)
 
+## [0.4.1] - 2025-01-20
+
+### Added
+- **Foundries Device Management Module**: New `foundries_devices.py` module for managing Foundries devices separately from VPN functionality
+- **Enhanced Device Information**: `list_foundries_devices` now returns comprehensive device metadata including creation date, last seen, owner, tags, device group, OSTree hash, UUID, and updated timestamps
+- **Google Sheets Export**: New `export_to_google_sheets.py` script for exporting Foundries device data to Google Spreadsheets with filtering and sorting capabilities
+- **Device Export Documentation**: Added `GOOGLE_SHEETS_SETUP.md` and `BROWSER_SETUP_GUIDE.md` for Google Sheets API setup
+
+### Changed
+- **Code Organization**: Refactored `list_foundries_devices` from `foundries_vpn.py` to dedicated `foundries_devices.py` module for better code organization
+- **Device List Parsing**: Improved parsing logic to correctly handle empty fields (device-group, updated-at) in fioctl output
+- **Help Documentation**: Updated help text to clarify that `list_foundries_devices` lists ALL devices, not just VPN-enabled ones
+
+### Fixed
+- **Field Parsing**: Fixed incorrect field extraction when device-group or updated-at fields are empty in fioctl output
+- **Circular Import**: Resolved circular import issue by properly organizing imports between foundries_vpn and foundries_devices modules
+
 ## [0.4.0] - 2025-11-17
 
 ### Added

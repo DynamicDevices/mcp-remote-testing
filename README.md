@@ -7,7 +7,7 @@
 
 MCP server exposing remote embedded hardware testing capabilities to AI assistants.
 
-**Version**: 0.4.0
+**Version**: 0.4.1
 
 ## Mission
 

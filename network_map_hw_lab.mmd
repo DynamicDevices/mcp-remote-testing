@@ -1,0 +1,47 @@
+```mermaid
+graph LR
+    %%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#fff', 'primaryTextColor':'#000', 'primaryBorderColor':'#000', 'lineColor':'#000', 'secondaryColor':'#fff', 'tertiaryColor':'#fff', 'background':'#fff', 'subgraphTitleFontSize':'20px', 'subgraphTitleFontWeight':'bold', 'subgraphPadding':20}}}%%
+    subgraph Network["Hardware Lab: 192.168.2.0/24 | 7 Online / 7 Total"]
+        subgraph PowerSwitches["🔌 Power Switches"]
+            T_device_192_168_2_6("🔌 tasmota-device-1<br/>192.168.2.6<br/>🟢 ON 0W"):::tasmota_device
+            T_device_192_168_2_7("🔌 tasmota-device-2<br/>192.168.2.7<br/>🟢 ON 2W"):::tasmota_device
+            T_device_192_168_2_9("🔌 tasmota-device-3<br/>192.168.2.9<br/>🔴 OFF 0W"):::tasmota_device
+        end
+        subgraph Devices["📱 Devices"]
+            D_device_192_168_2_1("🌐 Device at 192.168.2.1<br/>🌐 Gateway<br/>192.168.2.1<br/>SSH: ✓"):::network_infrastructure
+            D_device_192_168_2_10("📱 Device at 192.168.2.10<br/>192.168.2.10<br/>SSH: ✓"):::online
+            D_device_192_168_2_63("📱 Device at 192.168.2.63<br/>192.168.2.63<br/>SSH: ✓"):::online
+            D_test_sentai_board("📱 imx8mm-jaguar-sentai-2d0e0a09dab86563<br/>192.168.2.18<br/>SSH: ✓"):::online
+        end
+    end
+
+    subgraph Legend["📋 Legend"]
+        L1("💻 Development Boards"):::development_board
+        L2("🔬 Test Equipment"):::test_equipment
+        L3("🔌 Tasmota Power Switches"):::tasmota_device
+        L4("🖥️ Servers"):::server
+        L5("🌐 Network Infrastructure"):::network_infrastructure
+        L6("⚙️ Embedded Controllers"):::embedded_controllers
+        L7("📱 Other Devices"):::other
+        L8("🟢 Online Devices"):::online
+        L9("❌ Offline Devices"):::offline
+        L10("⚡ Power Connection"):::power_line
+    end
+
+    classDef development_board fill:#87CEEB,stroke:#4682B4,stroke-width:3px,color:#000
+    classDef test_equipment fill:#FFB6C1,stroke:#FF69B4,stroke-width:3px,color:#000
+    classDef tasmota_device fill:#DDA0DD,stroke:#9370DB,stroke-width:4px,color:#000
+    classDef server fill:#90EE90,stroke:#228B22,stroke-width:3px,color:#000
+    classDef network_infrastructure fill:#FFD700,stroke:#FFA500,stroke-width:3px,color:#000
+    classDef embedded_controllers fill:#FFA07A,stroke:#FF6347,stroke-width:3px,color:#000
+    classDef other fill:#D3D3D3,stroke:#808080,stroke-width:2px,color:#000
+    classDef online fill:#90EE90,stroke:#228B22,stroke-width:3px,color:#000
+    classDef offline fill:#FFB6B6,stroke:#FF0000,stroke-width:2px,stroke-dasharray: 5 5,color:#000
+    classDef power_line stroke:#FFD700,stroke-width:4px
+    classDef latency_excellent fill:#90EE90,stroke:#228B22,stroke-width:3px,color:#000
+    classDef latency_good fill:#FFD700,stroke:#FFA500,stroke-width:3px,color:#000
+    classDef latency_fair fill:#FFA07A,stroke:#FF6347,stroke-width:3px,color:#000
+    classDef latency_poor fill:#FF6B6B,stroke:#CC0000,stroke-width:3px,color:#FFF
+    classDef alert_device fill:#FFB6B6,stroke:#FF0000,stroke-width:4px,color:#000
+    linkStyle default stroke:#FFD700,stroke-width:3px
+```

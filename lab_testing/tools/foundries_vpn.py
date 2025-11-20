@@ -294,17 +294,17 @@ def connect_foundries_vpn(config_path: Optional[str] = None) -> Dict[str, Any]:
         if nm_result.returncode == 0:
             # Import successful, configure to ONLY route VPN network (critical for internet connectivity)
             connection_name = vpn_config.stem
-            
+
             # Parse AllowedIPs from config to set routes
             allowed_ips = []
-            with open(vpn_config, "r") as f:
+            with open(vpn_config) as f:
                 for line in f:
                     if line.strip().startswith("AllowedIPs"):
                         # Extract IPs from AllowedIPs = 10.42.42.0/24, ...
                         ips = line.split("=", 1)[1].strip()
                         allowed_ips = [ip.strip() for ip in ips.split(",")]
                         break
-            
+
             # Configure NetworkManager to ONLY route VPN network, never default route
             if allowed_ips:
                 routes_str = " ".join([f"ip = {ip}" for ip in allowed_ips])
@@ -314,7 +314,7 @@ def connect_foundries_vpn(config_path: Optional[str] = None) -> Dict[str, Any]:
                     capture_output=True,
                     timeout=5,
                 )
-            
+
             # CRITICAL: Prevent VPN from becoming default route
             subprocess.run(
                 ["nmcli", "connection", "modify", connection_name, "ipv4.never-default", "yes"],
@@ -322,7 +322,7 @@ def connect_foundries_vpn(config_path: Optional[str] = None) -> Dict[str, Any]:
                 capture_output=True,
                 timeout=5,
             )
-            
+
             # Connect
             connect_result = subprocess.run(
                 ["nmcli", "connection", "up", connection_name],
@@ -361,14 +361,14 @@ def connect_foundries_vpn(config_path: Optional[str] = None) -> Dict[str, Any]:
             }
 
         error_output = wg_result.stderr.strip() if wg_result.stderr else "Unknown error"
-        
+
         # Check if client peer might not be registered
         suggestions = [
             "Check VPN configuration file is valid",
             "Ensure WireGuard tools are installed",
             "Check if VPN server is accessible",
         ]
-        
+
         # Try to check client peer registration if we can derive public key
         try:
             config_content = vpn_config.read_text()
@@ -377,6 +377,7 @@ def connect_foundries_vpn(config_path: Optional[str] = None) -> Dict[str, Any]:
                     privkey = line.split("=", 1)[1].strip()
                     result = subprocess.run(
                         ["wg", "pubkey"],
+                        check=False,
                         input=privkey.encode(),
                         capture_output=True,
                         text=True,
@@ -386,14 +387,23 @@ def connect_foundries_vpn(config_path: Optional[str] = None) -> Dict[str, Any]:
                         pubkey = result.stdout.strip()
                         client_check = check_client_peer_registered(client_public_key=pubkey)
                         if client_check and not client_check.get("registered"):
-                            suggestions.insert(0, "⚠️  CRITICAL: Client peer may not be registered on server")
-                            suggestions.insert(1, "Check registration: check_client_peer_registered()")
-                            suggestions.insert(2, "Register if needed: register_foundries_vpn_client() (requires admin)")
-                            suggestions.insert(3, "Or contact VPN admin: ajlennon@dynamicdevices.co.uk")
+                            suggestions.insert(
+                                0, "⚠️  CRITICAL: Client peer may not be registered on server"
+                            )
+                            suggestions.insert(
+                                1, "Check registration: check_client_peer_registered()"
+                            )
+                            suggestions.insert(
+                                2,
+                                "Register if needed: register_foundries_vpn_client() (requires admin)",
+                            )
+                            suggestions.insert(
+                                3, "Or contact VPN admin: ajlennon@dynamicdevices.co.uk"
+                            )
                         break
         except Exception:
             pass  # Ignore errors in client check
-        
+
         return {
             "success": False,
             "error": f"Failed to connect to Foundries VPN: {error_output}",
@@ -521,201 +531,6 @@ def get_foundries_vpn_server_config(factory: Optional[str] = None) -> Dict[str, 
             "suggestions": [
                 "Check if fioctl is installed: https://github.com/foundriesio/fioctl",
                 "Check if fioctl is configured: Run 'fioctl login'",
-            ],
-        }
-
-
-def list_foundries_devices(factory: Optional[str] = None) -> Dict[str, Any]:
-    """
-    List devices accessible via Foundries VPN.
-
-    Uses fioctl to list devices in the FoundriesFactory that have WireGuard enabled.
-
-    Args:
-        factory: Optional factory name. If not provided, uses default factory from fioctl config.
-
-    Returns:
-        Dictionary with list of Foundries devices
-    """
-    try:
-        # Check if fioctl is installed and configured
-        fioctl_installed, fioctl_error = _check_fioctl_installed()
-        if not fioctl_installed:
-            return {
-                "success": False,
-                "error": fioctl_error,
-                "suggestions": [
-                    "Install fioctl CLI tool: https://github.com/foundriesio/fioctl",
-                ],
-            }
-
-        fioctl_configured, config_error = _check_fioctl_configured()
-        if not fioctl_configured:
-            return {
-                "success": False,
-                "error": config_error,
-                "suggestions": [
-                    "Run 'fioctl login' to configure FoundriesFactory credentials",
-                ],
-            }
-
-        # Get fioctl path
-        fioctl_path = _get_fioctl_path()
-        if not fioctl_path:
-            return {
-                "success": False,
-                "error": "fioctl not found",
-                "suggestions": [
-                    "Install fioctl CLI tool: https://github.com/foundriesio/fioctl",
-                ],
-            }
-
-        # Build fioctl command
-        cmd = [fioctl_path, "devices", "list"]
-        if factory:
-            cmd.extend(["--factory", factory])
-
-        result = subprocess.run(
-            cmd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else "Unknown error"
-            return {
-                "success": False,
-                "error": f"Failed to list Foundries devices: {error_msg}",
-                "suggestions": [
-                    "Check fioctl is configured correctly: 'fioctl factories list'",
-                    "Ensure you have access to the factory",
-                ],
-            }
-
-        # Parse fioctl output (table format)
-        # fioctl devices list outputs a table with columns: NAME, TARGET, STATUS, APPS, UP-TO-DATE, IS-PROD
-        # Columns are space-aligned, so we need to handle multi-word values carefully
-        lines = result.stdout.strip().split("\n")
-        devices = []
-
-        # Skip header and separator lines
-        for line in lines:
-            line = line.rstrip()  # Keep leading spaces for column detection
-            # Skip empty lines, header row, and separator row (lines starting with ----)
-            if (
-                not line.strip()
-                or line.strip().startswith("NAME")
-                or line.strip().startswith("----")
-            ):
-                continue
-
-            # Split by multiple spaces to handle column alignment
-            # Format: NAME (50 chars) TARGET (30 chars) STATUS (10 chars) APPS (variable) UP-TO-DATE IS-PROD
-            parts = [p for p in line.split("  ") if p.strip()]  # Split by double spaces
-
-            if len(parts) >= 3:
-                device_name = parts[0].strip()
-
-                # Handle multi-word TARGET (e.g., "Initial Target")
-                # If STATUS is "Target", then TARGET is actually two words
-                target_parts = parts[1].strip().split()
-                if len(target_parts) >= 2 and len(parts) > 2 and parts[2].strip() == "Target":
-                    # "Initial Target" case - combine first two parts
-                    target = " ".join(target_parts[:2])
-                    status = parts[2].strip() if len(parts) > 2 else "unknown"
-                    apps_start_idx = 3
-                else:
-                    target = target_parts[0] if target_parts else "Unknown"
-                    status = parts[2].strip() if len(parts) > 2 else "unknown"
-                    apps_start_idx = 3
-
-                # Extract apps, up_to_date, and is_prod
-                # Last two parts should be UP-TO-DATE and IS-PROD
-                apps = ""
-                up_to_date = "unknown"
-                is_prod = "unknown"
-
-                if len(parts) >= 5:
-                    # Has UP-TO-DATE and IS-PROD
-                    up_to_date = parts[-2].strip() if len(parts) >= 5 else "unknown"
-                    is_prod = parts[-1].strip() if len(parts) >= 5 else "unknown"
-                    # Everything between STATUS and UP-TO-DATE is APPS
-                    apps = " ".join([p.strip() for p in parts[apps_start_idx:-2] if p.strip()])
-                elif len(parts) > apps_start_idx:
-                    apps = " ".join([p.strip() for p in parts[apps_start_idx:] if p.strip()])
-
-                # Try to get VPN IP from cache first
-                vpn_ip = get_vpn_ip(device_name)
-                
-                # If not in cache, try to get from fioctl device config
-                if not vpn_ip:
-                    try:
-                        fioctl_path = _get_fioctl_path()
-                        if fioctl_path:
-                            config_cmd = [fioctl_path, "devices", "config", device_name, "wireguard"]
-                            if factory:
-                                config_cmd.extend(["--factory", factory])
-                            
-                            config_result = subprocess.run(
-                                config_cmd,
-                                check=False,
-                                capture_output=True,
-                                text=True,
-                                timeout=5,
-                            )
-                            
-                            if config_result.returncode == 0:
-                                # Parse output for address= line
-                                for line in config_result.stdout.split("\n"):
-                                    line = line.strip()
-                                    if line.startswith("address="):
-                                        ip_addr = line.split("=", 1)[1].strip()
-                                        if ip_addr and ip_addr != "(none)":
-                                            vpn_ip = ip_addr
-                                            # Cache it for future use
-                                            cache_vpn_ip(device_name, vpn_ip, source="fioctl")
-                                            break
-                    except Exception as e:
-                        logger.debug(f"Failed to get VPN IP from fioctl for {device_name}: {e}")
-                
-                device_info = {
-                    "name": device_name,
-                    "target": target,
-                    "status": status,
-                    "apps": apps,
-                    "up_to_date": up_to_date,
-                    "is_prod": is_prod,
-                    "factory": factory or "default",
-                }
-                
-                if vpn_ip:
-                    device_info["vpn_ip"] = vpn_ip
-                
-                devices.append(device_info)
-
-        return {
-            "success": True,
-            "devices": devices,
-            "count": len(devices),
-            "factory": factory or "default",
-            "message": f"Found {len(devices)} Foundries device(s)",
-            "next_steps": [
-                "Enable VPN on device: enable_foundries_vpn_device(device_name)",
-                "Connect to Foundries VPN: connect_foundries_vpn()",
-            ],
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to list Foundries devices: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": f"Failed to list Foundries devices: {e!s}",
-            "suggestions": [
-                "Check if fioctl is installed: https://github.com/foundriesio/fioctl",
-                "Check if fioctl is configured: Run 'fioctl login'",
-                "Verify you have access to the factory",
             ],
         }
 
@@ -961,19 +776,18 @@ def manage_foundries_vpn_ip_cache(
                     "vpn_ip": cached_ip,
                     "cached": True,
                 }
-            else:
-                return {
-                    "success": False,
-                    "device_name": device_name,
-                    "error": "VPN IP not found in cache",
-                    "suggestions": [
-                        "Refresh cache from server: manage_foundries_vpn_ip_cache(action='refresh')",
-                        "Manually set IP: manage_foundries_vpn_ip_cache(action='set', device_name='...', vpn_ip='...')",
-                        "List all cached IPs: manage_foundries_vpn_ip_cache(action='list')",
-                    ],
-                }
+            return {
+                "success": False,
+                "device_name": device_name,
+                "error": "VPN IP not found in cache",
+                "suggestions": [
+                    "Refresh cache from server: manage_foundries_vpn_ip_cache(action='refresh')",
+                    "Manually set IP: manage_foundries_vpn_ip_cache(action='set', device_name='...', vpn_ip='...')",
+                    "List all cached IPs: manage_foundries_vpn_ip_cache(action='list')",
+                ],
+            }
 
-        elif action == "list":
+        if action == "list":
             cached_ips = get_all_cached_ips()
             devices = []
             for dev_name, entry in cached_ips.items():
@@ -992,7 +806,7 @@ def manage_foundries_vpn_ip_cache(
                 "devices": devices,
             }
 
-        elif action == "set":
+        if action == "set":
             if not device_name or not vpn_ip:
                 return {
                     "success": False,
@@ -1007,7 +821,7 @@ def manage_foundries_vpn_ip_cache(
                 "message": f"Cached VPN IP for {device_name}: {vpn_ip}",
             }
 
-        elif action == "remove":
+        if action == "remove":
             if not device_name:
                 return {
                     "success": False,
@@ -1021,17 +835,16 @@ def manage_foundries_vpn_ip_cache(
                     "device_name": device_name,
                     "message": f"Removed VPN IP cache entry for {device_name}",
                 }
-            else:
-                return {
-                    "success": False,
-                    "device_name": device_name,
-                    "error": "Device not found in cache",
-                }
+            return {
+                "success": False,
+                "device_name": device_name,
+                "error": "Device not found in cache",
+            }
 
-        elif action == "refresh":
+        if action == "refresh":
             # Use fioctl to get VPN IPs from device configurations
             # This is more reliable than reading /etc/hosts from WireGuard server
-            
+
             # Check if fioctl is installed and configured
             fioctl_installed, fioctl_error = _check_fioctl_installed()
             if not fioctl_installed:
@@ -1129,7 +942,9 @@ def manage_foundries_vpn_ip_cache(
                                     break
                     else:
                         # Device might not have VPN enabled, skip silently
-                        logger.debug(f"Device {device_name} has no WireGuard config (may not be enabled)")
+                        logger.debug(
+                            f"Device {device_name} has no WireGuard config (may not be enabled)"
+                        )
                 except Exception as e:
                     errors.append(f"Failed to get VPN IP for {device_name}: {e!s}")
 
@@ -1142,12 +957,11 @@ def manage_foundries_vpn_ip_cache(
                 "errors": errors if errors else None,
             }
 
-        else:
-            return {
-                "success": False,
-                "error": f"Unknown action: {action}",
-                "valid_actions": ["get", "list", "set", "remove", "refresh"],
-            }
+        return {
+            "success": False,
+            "error": f"Unknown action: {action}",
+            "valid_actions": ["get", "list", "set", "remove", "refresh"],
+        }
 
     except Exception as e:
         logger.error(f"Failed to manage VPN IP cache: {e}", exc_info=True)
@@ -1661,6 +1475,7 @@ def verify_foundries_vpn_connection() -> Dict[str, Any]:
                             privkey = line.split("=", 1)[1].strip()
                             result = subprocess.run(
                                 ["wg", "pubkey"],
+                                check=False,
                                 input=privkey.encode(),
                                 capture_output=True,
                                 text=True,
@@ -1668,22 +1483,26 @@ def verify_foundries_vpn_connection() -> Dict[str, Any]:
                             )
                             if result.returncode == 0:
                                 pubkey = result.stdout.strip()
-                                client_check = check_client_peer_registered(client_public_key=pubkey)
+                                client_check = check_client_peer_registered(
+                                    client_public_key=pubkey
+                                )
                                 break
             except Exception:
                 pass  # Ignore errors in client check
-            
+
             suggestions = [
                 "Connect to VPN: connect_foundries_vpn()",
                 "Or run automated setup: setup_foundries_vpn()",
             ]
-            
+
             if client_check and not client_check.get("registered"):
                 suggestions.insert(0, "⚠️  CRITICAL: Client peer may not be registered on server")
                 suggestions.insert(1, "Check registration: check_client_peer_registered()")
-                suggestions.insert(2, "Register if needed: register_foundries_vpn_client() (requires admin)")
+                suggestions.insert(
+                    2, "Register if needed: register_foundries_vpn_client() (requires admin)"
+                )
                 suggestions.insert(3, "Or contact VPN admin: ajlennon@dynamicdevices.co.uk")
-            
+
             return {
                 "success": False,
                 "error": "VPN is not connected",
@@ -1808,6 +1627,7 @@ def enable_foundries_device_to_device(
 
         # Get device IP if not provided
         if not device_ip:
+            from lab_testing.tools.foundries_devices import list_foundries_devices
             devices = list_foundries_devices()
             if not devices.get("success"):
                 return {
@@ -1855,7 +1675,7 @@ def enable_foundries_device_to_device(
                             break
                 except Exception:
                     pass
-            
+
             if not server_host:
                 server_host = "144.76.167.54"  # Default
 
@@ -1876,7 +1696,9 @@ def enable_foundries_device_to_device(
         if server_password:
             ssh_to_server = f"sshpass -p '{server_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {server_port} {server_user}@{server_host}"
         else:
-            ssh_to_server = f"ssh -o StrictHostKeyChecking=no -p {server_port} {server_user}@{server_host}"
+            ssh_to_server = (
+                f"ssh -o StrictHostKeyChecking=no -p {server_port} {server_user}@{server_host}"
+            )
 
         # Execute update
         full_cmd = f"""{ssh_to_server} "{update_cmd} && {reload_cmd}" """
@@ -2002,6 +1824,7 @@ def check_client_peer_registered(
                             # Derive public key
                             result = subprocess.run(
                                 ["wg", "pubkey"],
+                                check=False,
                                 input=privkey.encode(),
                                 capture_output=True,
                                 text=True,
@@ -2047,7 +1870,9 @@ def check_client_peer_registered(
         if server_password:
             ssh_cmd = f"sshpass -p '{server_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {server_port} {server_user}@{server_host}"
         else:
-            ssh_cmd = f"ssh -o StrictHostKeyChecking=no -p {server_port} {server_user}@{server_host}"
+            ssh_cmd = (
+                f"ssh -o StrictHostKeyChecking=no -p {server_port} {server_user}@{server_host}"
+            )
 
         # Check if peer exists in runtime
         check_runtime_cmd = f"{ssh_cmd} 'wg show factory | grep -A 3 \"{client_public_key}\"'"
@@ -2063,7 +1888,7 @@ def check_client_peer_registered(
         runtime_registered = result.returncode == 0 and client_public_key in result.stdout
 
         # Check if peer exists in config file
-        check_config_cmd = f"{ssh_cmd} 'grep -A 3 \"{client_public_key}\" /etc/wireguard/factory.conf || grep \"{client_public_key}\" /etc/wireguard/factory-clients.conf'"
+        check_config_cmd = f'{ssh_cmd} \'grep -A 3 "{client_public_key}" /etc/wireguard/factory.conf || grep "{client_public_key}" /etc/wireguard/factory-clients.conf\''
         result_config = subprocess.run(
             check_config_cmd,
             shell=True,
@@ -2138,7 +1963,7 @@ def register_foundries_vpn_client(
 
     This tool automates client peer registration. It connects to the server via
     Foundries VPN (10.42.42.1). Requires Foundries VPN to be connected first.
-    
+
     **Bootstrap Scenario:** For clean installation, the first admin needs initial
     server access (public IP or direct access) to register themselves. After the
     first admin connects, all subsequent client registrations can be done via
@@ -2191,7 +2016,9 @@ def register_foundries_vpn_client(
         if server_password:
             ssh_cmd = f"sshpass -p '{server_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {server_port} {server_user}@{server_host}"
         else:
-            ssh_cmd = f"ssh -o StrictHostKeyChecking=no -p {server_port} {server_user}@{server_host}"
+            ssh_cmd = (
+                f"ssh -o StrictHostKeyChecking=no -p {server_port} {server_user}@{server_host}"
+            )
 
         # Check if peer already exists
         check_cmd = f"{ssh_cmd} 'wg show factory | grep \"{client_public_key}\"'"
@@ -2218,7 +2045,7 @@ def register_foundries_vpn_client(
             # Add to factory-clients.conf
             comment = f"# Client peer - {assigned_ip}"
             peer_line = f"{client_public_key} {assigned_ip} client"
-            
+
             # Check if config file exists, create if not
             check_file_cmd = f"{ssh_cmd} 'test -f /etc/wireguard/factory-clients.conf && echo exists || echo notfound'"
             result = subprocess.run(
@@ -2245,7 +2072,9 @@ def register_foundries_vpn_client(
                     steps_completed.append("Created /etc/wireguard/factory-clients.conf")
 
             # Check if peer already in config file
-            check_peer_cmd = f"{ssh_cmd} 'grep \"{client_public_key}\" /etc/wireguard/factory-clients.conf'"
+            check_peer_cmd = (
+                f"{ssh_cmd} 'grep \"{client_public_key}\" /etc/wireguard/factory-clients.conf'"
+            )
             result = subprocess.run(
                 check_peer_cmd,
                 shell=True,
@@ -2259,7 +2088,9 @@ def register_foundries_vpn_client(
                 steps_completed.append("Client peer already in config file")
             else:
                 # Add peer to config file
-                add_peer_cmd = f"{ssh_cmd} 'echo \"{peer_line}\" >> /etc/wireguard/factory-clients.conf'"
+                add_peer_cmd = (
+                    f"{ssh_cmd} 'echo \"{peer_line}\" >> /etc/wireguard/factory-clients.conf'"
+                )
                 result = subprocess.run(
                     add_peer_cmd,
                     shell=True,

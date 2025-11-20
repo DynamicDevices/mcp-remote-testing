@@ -187,4 +187,3 @@ def remove_vpn_ip(device_name: str) -> bool:
     save_vpn_ip_cache(cache)
     logger.info(f"Removed VPN IP cache entry for {device_name}")
     return True
-
