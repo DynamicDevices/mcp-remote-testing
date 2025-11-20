@@ -16,6 +16,7 @@ from lab_testing.tools.foundries_vpn_helpers import (
     _check_fioctl_configured,
     _check_fioctl_installed,
 )
+from lab_testing.tools.foundries_vpn_server import get_foundries_vpn_server_config
 from lab_testing.utils.logger import get_logger
 
 logger = get_logger()
