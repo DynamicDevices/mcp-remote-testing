@@ -175,8 +175,119 @@ def manage_foundries_vpn_ip_cache(
             }
 
         if action == "refresh":
+            # If refresh_from_server is True, read from WireGuard server /etc/hosts
+            if refresh_from_server:
+                from lab_testing.config import get_foundries_vpn_config
+
+                # Get server connection details
+                if not server_host:
+                    config_path = get_foundries_vpn_config()
+                    if config_path and config_path.exists():
+                        # Try to read config file to get server endpoint
+                        try:
+                            config_content = config_path.read_text()
+                            for line in config_content.split("\n"):
+                                line = line.strip()
+                                if line.startswith("Endpoint =") or line.startswith("Endpoint="):
+                                    endpoint = line.split("=", 1)[1].strip()
+                                    # Extract host from endpoint (e.g., "144.76.167.54:5555" -> "144.76.167.54")
+                                    server_host = endpoint.split(":")[0] if ":" in endpoint else endpoint
+                                    break
+                        except Exception:
+                            pass
+
+                # Default server host
+                if not server_host:
+                    server_host = "proxmox.dynamicdevices.co.uk"
+
+                # Read /etc/hosts from WireGuard server
+                try:
+                    if server_password:
+                        ssh_cmd = [
+                            "sshpass",
+                            "-p",
+                            server_password,
+                            "ssh",
+                            "-o",
+                            "StrictHostKeyChecking=no",
+                            "-o",
+                            "UserKnownHostsFile=/dev/null",
+                            "-p",
+                            str(server_port),
+                            f"{server_user}@{server_host}",
+                            "cat /etc/hosts | grep -E '10\\.42\\.42\\.[0-9]+' | grep -v '^#' | grep -v '^$'",
+                        ]
+                    else:
+                        ssh_cmd = [
+                            "ssh",
+                            "-o",
+                            "StrictHostKeyChecking=no",
+                            "-p",
+                            str(server_port),
+                            f"{server_user}@{server_host}",
+                            "cat /etc/hosts | grep -E '10\\.42\\.42\\.[0-9]+' | grep -v '^#' | grep -v '^$'",
+                        ]
+
+                    hosts_result = subprocess.run(
+                        ssh_cmd,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+
+                    if hosts_result.returncode == 0:
+                        cached_count = 0
+                        devices_cached = {}
+                        for line in hosts_result.stdout.strip().split("\n"):
+                            line = line.strip()
+                            if not line:
+                                continue
+                            # Parse /etc/hosts format: "10.42.42.3    imx8mm-jaguar-inst-5120a09dab86563"
+                            parts = line.split()
+                            if len(parts) >= 2:
+                                ip_addr = parts[0].strip()
+                                device_name_parsed = parts[1].strip()
+                                # Only cache Foundries device names
+                                if "imx8mm" in device_name_parsed or "jaguar" in device_name_parsed:
+                                    cache_vpn_ip(device_name_parsed, ip_addr, source="server_hosts")
+                                    cached_count += 1
+                                    devices_cached[device_name_parsed] = ip_addr
+                                    logger.debug(
+                                        f"Cached VPN IP from server /etc/hosts: {device_name_parsed} -> {ip_addr}"
+                                    )
+
+                        return {
+                            "success": True,
+                            "cached_count": cached_count,
+                            "devices_cached": cached_count,
+                            "devices": devices_cached,
+                            "source": "server_hosts",
+                            "message": f"Refreshed VPN IP cache from WireGuard server /etc/hosts: {cached_count} devices cached",
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"Failed to read /etc/hosts from server: {hosts_result.stderr}",
+                            "suggestions": [
+                                "Check SSH access to WireGuard server",
+                                "Verify server_host, server_port, and credentials",
+                            ],
+                        }
+                except Exception as e:
+                    logger.error(f"Failed to refresh VPN IP cache from server: {e}", exc_info=True)
+                    return {
+                        "success": False,
+                        "error": f"Failed to refresh from server: {e!s}",
+                        "suggestions": [
+                            "Check SSH access to WireGuard server",
+                            "Try using fioctl instead: refresh_from_server=False",
+                        ],
+                    }
+
             # Use fioctl to get VPN IPs from device configurations
-            # This is more reliable than reading /etc/hosts from WireGuard server
+            # This uses fioctl to list devices, then checks which have VPN enabled
+            # Note: fioctl doesn't directly provide VPN IPs, but we can use it to identify devices
 
             # Check if fioctl is installed and configured
             fioctl_installed, fioctl_error = _check_fioctl_installed()
@@ -245,40 +356,55 @@ def manage_foundries_vpn_ip_cache(
                     if "imx8mm" in device_name_parsed or "jaguar" in device_name_parsed:
                         devices.append(device_name_parsed)
 
-            # Get VPN IP for each device from fioctl config
+            # Get VPN IP for each device using fioctl devices show
+            # The VPN IP is in the active config under wireguard-client -> address=
             cached_count = 0
             errors = []
+            devices_cached = {}
 
             for device_name_parsed in devices:
                 try:
-                    # Get device wireguard config
-                    config_cmd = [fioctl_path, "devices", "config", device_name_parsed, "wireguard"]
-                    config_result = subprocess.run(
-                        config_cmd,
+                    # Get device details using fioctl devices show
+                    show_cmd = [fioctl_path, "devices", "show", device_name_parsed]
+                    show_result = subprocess.run(
+                        show_cmd,
                         check=False,
                         capture_output=True,
                         text=True,
                         timeout=10,
                     )
 
-                    if config_result.returncode == 0:
-                        # Parse output for address= line
-                        # Format: "address=10.42.42.4" or similar
-                        for line in config_result.stdout.split("\n"):
+                    if show_result.returncode == 0:
+                        # Parse output for address= line in wireguard-client section
+                        # Format: "address=10.42.42.3" under "wireguard-client" in Active config
+                        in_wireguard_section = False
+                        for line in show_result.stdout.split("\n"):
                             line = line.strip()
-                            if line.startswith("address="):
-                                ip_addr = line.split("=", 1)[1].strip()
-                                if ip_addr and ip_addr != "(none)":
-                                    cache_vpn_ip(device_name_parsed, ip_addr, source="fioctl")
-                                    cached_count += 1
-                                    logger.debug(
-                                        f"Cached VPN IP for {device_name_parsed}: {ip_addr}"
-                                    )
-                                    break
+                            # Look for wireguard-client section
+                            if "wireguard-client" in line.lower():
+                                in_wireguard_section = True
+                                continue
+                            # Once in wireguard section, look for address= line
+                            if in_wireguard_section:
+                                if line.startswith("address=") or line.startswith("| address="):
+                                    # Handle both "address=..." and "| address=..." formats
+                                    ip_addr = line.split("address=", 1)[1].strip() if "address=" in line else None
+                                    if ip_addr and ip_addr != "(none)":
+                                        cache_vpn_ip(device_name_parsed, ip_addr, source="fioctl")
+                                        cached_count += 1
+                                        devices_cached[device_name_parsed] = ip_addr
+                                        logger.debug(
+                                            f"Cached VPN IP for {device_name_parsed}: {ip_addr}"
+                                        )
+                                        break
+                                # Stop looking if we hit the next section
+                                elif line and not line.startswith("|") and not line.startswith("address="):
+                                    # Moved to next section
+                                    in_wireguard_section = False
                     else:
-                        # Device might not have VPN enabled, skip silently
+                        # Device might not exist or have issues, skip silently
                         logger.debug(
-                            f"Device {device_name_parsed} has no WireGuard config (may not be enabled)"
+                            f"Device {device_name_parsed} show failed (may not exist or have VPN enabled)"
                         )
                 except Exception as e:
                     errors.append(f"Failed to get VPN IP for {device_name_parsed}: {e!s}")
@@ -286,6 +412,8 @@ def manage_foundries_vpn_ip_cache(
             return {
                 "success": True,
                 "cached_count": cached_count,
+                "devices_cached": cached_count,
+                "devices": devices_cached,
                 "source": "fioctl",
                 "devices_checked": len(devices),
                 "message": f"Refreshed VPN IP cache from fioctl: {cached_count} devices cached",
