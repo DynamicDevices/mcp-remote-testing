@@ -20,7 +20,7 @@ def get_device_fio_info(device_id: str) -> Dict[str, Any]:
             "device_id": device_info.get("device_id", device_id),
             "ip": device_info.get("ip"),
         }
-    
+
     # Fall back to local config for Foundries-specific metadata
     try:
         with open(get_lab_devices_config()) as f:
@@ -157,12 +157,15 @@ def list_containers(device_id: str) -> Dict[str, Any]:
                 "success": True,
                 "device_id": result.get("device_id", device_id),
                 "device_type": result.get("device_type", "unknown"),
+                "connection_method": result.get("connection_method", "direct"),
                 "containers": containers,
                 "count": len(containers),
             }
         return {
             "success": False,
             "device_id": result.get("device_id", device_id),
+            "device_type": result.get("device_type", "unknown"),
+            "connection_method": result.get("connection_method", "direct"),
             "error": result.get("stderr") or result.get("error", "Failed to list containers"),
         }
     except Exception as e:
@@ -210,6 +213,7 @@ def get_container_logs(
                 "success": True,
                 "device_id": result.get("device_id", device_id),
                 "device_type": result.get("device_type", "unknown"),
+                "connection_method": result.get("connection_method", "direct"),
                 "container_name": container_name,
                 "logs": result.get("stdout", ""),
                 "tail": tail,
@@ -219,6 +223,8 @@ def get_container_logs(
         return {
             "success": False,
             "device_id": result.get("device_id", device_id),
+            "device_type": result.get("device_type", "unknown"),
+            "connection_method": result.get("connection_method", "direct"),
             "container_name": container_name,
             "error": result.get("stderr") or result.get("error", "Failed to get container logs"),
         }
@@ -247,6 +253,7 @@ def restart_container(device_id: str, container_name: str) -> Dict[str, Any]:
                 "success": True,
                 "device_id": result.get("device_id", device_id),
                 "device_type": result.get("device_type", "unknown"),
+                "connection_method": result.get("connection_method", "direct"),
                 "container_name": container_name,
                 "message": f"Container {container_name} restarted successfully",
                 "output": result.get("stdout", ""),
@@ -254,6 +261,8 @@ def restart_container(device_id: str, container_name: str) -> Dict[str, Any]:
         return {
             "success": False,
             "device_id": result.get("device_id", device_id),
+            "device_type": result.get("device_type", "unknown"),
+            "connection_method": result.get("connection_method", "direct"),
             "container_name": container_name,
             "error": result.get("stderr") or result.get("error", "Failed to restart container"),
         }
@@ -286,6 +295,7 @@ def inspect_container(device_id: str, container_name: str) -> Dict[str, Any]:
                     "success": True,
                     "device_id": result.get("device_id", device_id),
                     "device_type": result.get("device_type", "unknown"),
+                    "connection_method": result.get("connection_method", "direct"),
                     "container_name": container_name,
                     "inspect_data": inspect_data,
                 }
@@ -294,6 +304,7 @@ def inspect_container(device_id: str, container_name: str) -> Dict[str, Any]:
                     "success": True,
                     "device_id": result.get("device_id", device_id),
                     "device_type": result.get("device_type", "unknown"),
+                    "connection_method": result.get("connection_method", "direct"),
                     "container_name": container_name,
                     "raw_output": result.get("stdout", ""),
                     "note": "Could not parse JSON, returning raw output",
@@ -301,6 +312,8 @@ def inspect_container(device_id: str, container_name: str) -> Dict[str, Any]:
         return {
             "success": False,
             "device_id": result.get("device_id", device_id),
+            "device_type": result.get("device_type", "unknown"),
+            "connection_method": result.get("connection_method", "direct"),
             "container_name": container_name,
             "error": result.get("stderr") or result.get("error", "Failed to inspect container"),
         }
@@ -338,12 +351,15 @@ def get_container_stats(device_id: str, container_name: str) -> Dict[str, Any]:
                         "success": True,
                         "device_id": result.get("device_id", device_id),
                         "device_type": result.get("device_type", "unknown"),
+                        "connection_method": result.get("connection_method", "direct"),
                         "container_name": container_name,
                         "stats": stats,
                     }
                 return {
                     "success": False,
                     "device_id": result.get("device_id", device_id),
+                    "device_type": result.get("device_type", "unknown"),
+                    "connection_method": result.get("connection_method", "direct"),
                     "container_name": container_name,
                     "error": "Container not found or not running",
                 }
@@ -352,6 +368,7 @@ def get_container_stats(device_id: str, container_name: str) -> Dict[str, Any]:
                     "success": True,
                     "device_id": result.get("device_id", device_id),
                     "device_type": result.get("device_type", "unknown"),
+                    "connection_method": result.get("connection_method", "direct"),
                     "container_name": container_name,
                     "raw_output": result.get("stdout", ""),
                     "note": "Could not parse JSON, returning raw output",
@@ -359,6 +376,8 @@ def get_container_stats(device_id: str, container_name: str) -> Dict[str, Any]:
         return {
             "success": False,
             "device_id": result.get("device_id", device_id),
+            "device_type": result.get("device_type", "unknown"),
+            "connection_method": result.get("connection_method", "direct"),
             "container_name": container_name,
             "error": result.get("stderr") or result.get("error", "Failed to get container stats"),
         }

@@ -5,14 +5,18 @@ Provides a unified interface for accessing both Foundries devices (via VPN IP)
 and local config devices. Automatically detects device type and uses appropriate
 access method.
 
+For Foundries devices, if direct connection fails, automatically falls back to
+connecting through the VPN server (device-to-device communication).
+
 Copyright (C) 2025 Dynamic Devices Ltd
 License: GPL-3.0-or-later
 """
 
 import subprocess
+from pathlib import Path
 from typing import Any, Dict, Optional
 
-from lab_testing.config import get_lab_devices_config
+from lab_testing.config import get_foundries_vpn_config, get_lab_devices_config
 from lab_testing.tools.device_manager import load_device_config, resolve_device_identifier
 from lab_testing.utils.credentials import get_ssh_command
 from lab_testing.utils.foundries_vpn_cache import get_vpn_ip
@@ -82,6 +86,59 @@ def get_unified_device_info(device_id_or_name: str) -> Dict[str, Any]:
     }
 
 
+def _get_vpn_server_connection_info() -> Dict[str, Any]:
+    """
+    Get VPN server connection details for SSH fallback.
+
+    Returns:
+        Dictionary with server_host, server_port, server_user, server_password
+    """
+    server_host = None
+    server_port = 5025  # Default SSH port for VPN server
+    server_user = "root"
+    server_password = None
+
+    # Try to get server endpoint from VPN config
+    # Note: Endpoint in VPN config is WireGuard port (e.g., 5555), not SSH port
+    config_path = get_foundries_vpn_config()
+    if config_path and config_path.exists():
+        try:
+            config_content = config_path.read_text()
+            for line in config_content.split("\n"):
+                line = line.strip()
+                if line.startswith("Endpoint =") or line.startswith("Endpoint="):
+                    endpoint = line.split("=", 1)[1].strip()
+                    # Extract host from endpoint (e.g., "144.76.167.54:5555" -> "144.76.167.54")
+                    # Note: The port in endpoint is WireGuard port, not SSH port
+                    if ":" in endpoint:
+                        server_host = endpoint.split(":")[0]
+                    else:
+                        server_host = endpoint
+                    break
+        except Exception:
+            pass
+
+    # Default server host if not found in config
+    if not server_host:
+        server_host = "proxmox.dynamicdevices.co.uk"
+
+    # SSH port is always 5025 for our VPN server (not the WireGuard port from config)
+    # This is hardcoded because SSH port is different from WireGuard port
+
+    # Try to get password from environment or use default
+    # In production, this should use SSH keys, but we support password as fallback
+    import os
+
+    server_password = os.getenv("FOUNDRIES_VPN_SERVER_PASSWORD", "decafbad00")
+
+    return {
+        "server_host": server_host,
+        "server_port": server_port,
+        "server_user": server_user,
+        "server_password": server_password,
+    }
+
+
 def ssh_to_unified_device(
     device_id_or_name: str, command: str, username: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -89,6 +146,8 @@ def ssh_to_unified_device(
     Execute SSH command on device (Foundries or local).
 
     Automatically detects device type and uses appropriate access method.
+    For Foundries devices, if direct connection fails, falls back to
+    connecting through the VPN server.
 
     Args:
         device_id_or_name: Device identifier or friendly name
@@ -114,7 +173,7 @@ def ssh_to_unified_device(
         f"Executing SSH command on {device_type} device {device_id_or_name} ({ip}): {command}"
     )
 
-    # Build SSH command
+    # Build SSH command for direct connection
     ssh_cmd = get_ssh_command(ip, ssh_username, command, device_id_or_name, use_password=False)
 
     # Add port if not default
@@ -126,10 +185,153 @@ def ssh_to_unified_device(
             ssh_cmd.insert(port_idx, "-p")
             ssh_cmd.insert(port_idx + 1, str(ssh_port))
 
-    # Execute command
+    # Execute command - try direct connection first
     try:
         result = subprocess.run(
             ssh_cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,  # Shorter timeout for direct connection attempt
+        )
+
+        # If direct connection succeeds, return result
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode,
+                "device_id": device_info["device_id"],
+                "device_type": device_type,
+                "ip": ip,
+                "connection_method": "direct",
+            }
+
+        # If direct connection fails and this is a Foundries device, try server fallback
+        if device_type == "foundries":
+            logger.debug(
+                f"Direct connection failed for Foundries device {device_id_or_name}, trying server fallback"
+            )
+            return _ssh_through_vpn_server(device_info, command, ssh_username)
+
+        # For local devices or if fallback not applicable, return direct connection result
+        return {
+            "success": False,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode,
+            "error": result.stderr.strip() if result.stderr else "SSH connection failed",
+            "device_id": device_info["device_id"],
+            "device_type": device_type,
+            "ip": ip,
+            "connection_method": "direct",
+        }
+
+    except subprocess.TimeoutExpired:
+        # If timeout and Foundries device, try server fallback
+        if device_type == "foundries":
+            logger.debug(
+                f"Direct connection timed out for Foundries device {device_id_or_name}, trying server fallback"
+            )
+            return _ssh_through_vpn_server(device_info, command, ssh_username)
+
+        return {
+            "success": False,
+            "error": "SSH command timed out after 10 seconds",
+            "device_id": device_info["device_id"],
+            "device_type": device_type,
+            "ip": ip,
+            "connection_method": "direct",
+        }
+    except Exception as e:
+        # If exception and Foundries device, try server fallback
+        if device_type == "foundries":
+            logger.debug(
+                f"Direct connection exception for Foundries device {device_id_or_name}, trying server fallback: {e}"
+            )
+            return _ssh_through_vpn_server(device_info, command, ssh_username)
+
+        return {
+            "success": False,
+            "error": f"SSH command failed: {e!s}",
+            "device_id": device_info["device_id"],
+            "device_type": device_type,
+            "ip": ip,
+            "connection_method": "direct",
+        }
+
+
+def _ssh_through_vpn_server(
+    device_info: Dict[str, Any], command: str, username: str
+) -> Dict[str, Any]:
+    """
+    Execute SSH command on Foundries device through VPN server.
+
+    This is a fallback when direct connection fails. It SSHs to the VPN server,
+    then from there SSHs to the device.
+
+    Args:
+        device_info: Device information dictionary
+        command: Command to execute on device
+        username: SSH username for device
+
+    Returns:
+        Dictionary with command results
+    """
+    device_ip = device_info["ip"]
+    device_id = device_info["device_id"]
+    device_password = "fio"  # Default Foundries device password
+
+    # Get VPN server connection info
+    server_info = _get_vpn_server_connection_info()
+    server_host = server_info["server_host"]
+    server_port = server_info["server_port"]
+    server_user = server_info["server_user"]
+    server_password = server_info["server_password"]
+
+    logger.debug(
+        f"Connecting to Foundries device {device_id} ({device_ip}) through VPN server {server_host}:{server_port}"
+    )
+
+    # Escape command for nested SSH
+    # Escape single quotes by replacing ' with '\'' (end quote, escaped quote, start quote)
+    command_escaped = command.replace("'", "'\\''")
+
+    # Build nested SSH command: SSH to server, then SSH to device
+    # Format: ssh server "sshpass -p 'password' ssh device 'command'"
+    device_ssh_cmd = f"sshpass -p '{device_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {username}@{device_ip} '{command_escaped}'"
+
+    # Build server SSH command
+    if server_password:
+        server_ssh_cmd = [
+            "sshpass",
+            "-p",
+            server_password,
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-p",
+            str(server_port),
+            f"{server_user}@{server_host}",
+            device_ssh_cmd,
+        ]
+    else:
+        server_ssh_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-p",
+            str(server_port),
+            f"{server_user}@{server_host}",
+            device_ssh_cmd,
+        ]
+
+    try:
+        result = subprocess.run(
+            server_ssh_cmd,
             check=False,
             capture_output=True,
             text=True,
@@ -142,22 +344,28 @@ def ssh_to_unified_device(
             "stderr": result.stderr,
             "returncode": result.returncode,
             "device_id": device_info["device_id"],
-            "device_type": device_type,
-            "ip": ip,
+            "device_type": device_info["device_type"],
+            "ip": device_ip,
+            "connection_method": "through_vpn_server",
+            "server_host": server_host,
         }
     except subprocess.TimeoutExpired:
         return {
             "success": False,
-            "error": "SSH command timed out after 60 seconds",
+            "error": "SSH command through VPN server timed out after 60 seconds",
             "device_id": device_info["device_id"],
-            "device_type": device_type,
-            "ip": ip,
+            "device_type": device_info["device_type"],
+            "ip": device_ip,
+            "connection_method": "through_vpn_server",
+            "server_host": server_host,
         }
     except Exception as e:
         return {
             "success": False,
-            "error": f"SSH command failed: {e!s}",
+            "error": f"SSH command through VPN server failed: {e!s}",
             "device_id": device_info["device_id"],
-            "device_type": device_type,
-            "ip": ip,
+            "device_type": device_info["device_type"],
+            "ip": device_ip,
+            "connection_method": "through_vpn_server",
+            "server_host": server_host,
         }
