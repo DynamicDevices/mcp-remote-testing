@@ -1628,6 +1628,7 @@ def enable_foundries_device_to_device(
         # Get device IP if not provided
         if not device_ip:
             from lab_testing.tools.foundries_devices import list_foundries_devices
+
             devices = list_foundries_devices()
             if not devices.get("success"):
                 return {

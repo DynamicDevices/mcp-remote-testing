@@ -160,18 +160,18 @@ def list_foundries_devices(factory: Optional[str] = None) -> Dict[str, Any]:
                 # Fixed positions: name[0], target[1], status[2], apps[3], up-to-date[4], is-prod[5]
                 # created-at[6], last-seen[7], then variable: device-group[8] (may be empty), tag[8 or 9],
                 # owner[9 or 10], updated-at[10 or 11] (may be empty), ostree-hash[10 or 11], uuid[11 or 12]
-                
+
                 if len(parts) >= 6:
                     # At minimum: name, target, status, apps, up-to-date, is-prod
                     up_to_date = parts[4].strip() if len(parts) > 4 else "unknown"
                     is_prod = parts[5].strip() if len(parts) > 5 else "unknown"
                     apps = parts[3].strip() if len(parts) > 3 else ""
-                
+
                 if len(parts) >= 8:
                     # Has: name, target, status, apps, up-to-date, is-prod, created-at, last-seen
                     created_at = parts[6].strip() if len(parts) > 6 else None
                     last_seen = parts[7].strip() if len(parts) > 7 else None
-                
+
                 # For remaining fields, parse from the end (most reliable)
                 # UUID is always last (if present), ostree-hash is second-to-last, etc.
                 if len(parts) >= 12:
@@ -300,4 +300,3 @@ def list_foundries_devices(factory: Optional[str] = None) -> Dict[str, Any]:
                 "Verify you have access to the factory",
             ],
         }
-
