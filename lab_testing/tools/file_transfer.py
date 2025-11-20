@@ -204,12 +204,22 @@ def copy_file_to_device(
         }
 
     except subprocess.TimeoutExpired:
+        # If timeout and this is a Foundries device, try VPN server fallback
+        if device_type == "foundries":
+            logger.debug(
+                f"Direct scp timed out for Foundries device {device_id}, trying VPN server fallback"
+            )
+            return _copy_file_to_device_via_vpn_server(
+                device_info, local_path, remote_path, username, preserve_permissions
+            )
         error_msg = "File copy timed out (60 seconds)"
         logger.error(error_msg)
         return {
             "success": False,
             "error": error_msg,
             "device_id": resolved_device_id,
+            "device_type": device_type,
+            "connection_method": "direct",
         }
     except Exception as e:
         error_msg = f"Failed to copy file: {e!s}"
@@ -266,33 +276,60 @@ def _copy_file_to_device_via_vpn_server(
         }
 
     try:
-        # Use scp with ProxyJump to copy through VPN server
-        # Format: scp -o ProxyJump="server" local_file user@device:remote_path
-        scp_cmd = ["scp"]
+        # Two-step copy: local -> VPN server -> device
+        # Step 1: Copy file to VPN server temp location
+        import tempfile
+        import uuid
 
-        # Add ProxyJump option for VPN server
-        proxy_jump = f"{server_user}@{server_host}:{server_port}"
-        scp_cmd.extend(["-o", f"ProxyJump={proxy_jump}"])
-        scp_cmd.extend(["-o", "StrictHostKeyChecking=no"])
-        scp_cmd.extend(["-o", "UserKnownHostsFile=/dev/null"])
+        temp_filename = f"mcp_transfer_{uuid.uuid4().hex[:8]}"
+        server_temp_path = f"/tmp/{temp_filename}"
 
-        # Add server password if needed
-        if server_password:
-            scp_cmd = ["sshpass", "-p", server_password] + scp_cmd
-
-        # Preserve permissions if requested
+        # Copy to server
+        server_scp_cmd = ["scp"]
+        server_scp_cmd.extend(["-o", "StrictHostKeyChecking=no"])
+        server_scp_cmd.extend(["-o", "UserKnownHostsFile=/dev/null"])
+        server_scp_cmd.extend(["-P", str(server_port)])
         if preserve_permissions:
-            scp_cmd.append("-p")
+            server_scp_cmd.append("-p")
+        server_scp_cmd.append("-C")  # Compression
+        server_scp_cmd.append(str(local_file))
+        server_scp_cmd.append(f"{server_user}@{server_host}:{server_temp_path}")
 
-        # Add compression
-        scp_cmd.append("-C")
+        if server_password:
+            server_scp_cmd = ["sshpass", "-p", server_password] + server_scp_cmd
 
-        # Add source and destination
-        scp_cmd.append(str(local_file))
-        scp_cmd.append(f"{username}@{device_ip}:{remote_path}")
+        server_result = subprocess.run(
+            server_scp_cmd, check=False, capture_output=True, text=True, timeout=60
+        )
 
-        # Execute scp through VPN server
-        result = subprocess.run(scp_cmd, check=False, capture_output=True, text=True, timeout=120)
+        if server_result.returncode != 0:
+            return {
+                "success": False,
+                "error": f"Failed to copy file to VPN server: {server_result.stderr.strip() or 'Unknown error'}",
+                "device_id": device_id,
+                "connection_method": "through_vpn_server",
+            }
+
+        # Step 2: Copy from server to device
+        device_password = "fio"  # Default Foundries device password
+        device_scp_cmd = f"sshpass -p '{device_password}' scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {server_temp_path} {username}@{device_ip}:{remote_path} && rm -f {server_temp_path}"
+
+        # SSH to server and execute scp to device
+        ssh_to_server_cmd = ["ssh"]
+        ssh_to_server_cmd.extend(["-o", "StrictHostKeyChecking=no"])
+        ssh_to_server_cmd.extend(["-o", "UserKnownHostsFile=/dev/null"])
+        ssh_to_server_cmd.extend(["-p", str(server_port)])
+        ssh_to_server_cmd.append(f"{server_user}@{server_host}")
+
+        if server_password:
+            ssh_to_server_cmd = ["sshpass", "-p", server_password] + ssh_to_server_cmd
+
+        ssh_to_server_cmd.append(device_scp_cmd)
+
+        # Execute nested command
+        result = subprocess.run(
+            ssh_to_server_cmd, check=False, capture_output=True, text=True, timeout=120
+        )
 
         if result.returncode == 0:
             logger.info(
@@ -481,20 +518,40 @@ def copy_file_from_device(
         }
 
     except subprocess.TimeoutExpired:
+        # If timeout and this is a Foundries device, try VPN server fallback
+        if device_type == "foundries":
+            logger.debug(
+                f"Direct scp timed out for Foundries device {device_id}, trying VPN server fallback"
+            )
+            return _copy_file_from_device_via_vpn_server(
+                device_info, remote_path, local_path, username, preserve_permissions
+            )
         error_msg = "File copy timed out (60 seconds)"
         logger.error(error_msg)
         return {
             "success": False,
             "error": error_msg,
             "device_id": resolved_device_id,
+            "device_type": device_type,
+            "connection_method": "direct",
         }
     except Exception as e:
+        # If exception and this is a Foundries device, try VPN server fallback
+        if device_type == "foundries":
+            logger.debug(
+                f"Direct scp exception for Foundries device {device_id}, trying VPN server fallback: {e}"
+            )
+            return _copy_file_from_device_via_vpn_server(
+                device_info, remote_path, local_path, username, preserve_permissions
+            )
         error_msg = f"Failed to copy file: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "success": False,
             "error": error_msg,
             "device_id": resolved_device_id,
+            "device_type": device_type,
+            "connection_method": "direct",
         }
 
 
@@ -537,32 +594,64 @@ def _copy_file_from_device_via_vpn_server(
     local_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Use scp with ProxyJump to copy through VPN server
-        scp_cmd = ["scp"]
+        # Two-step copy: device -> VPN server -> local
+        # Step 1: Copy file from device to VPN server temp location
+        import tempfile
+        import uuid
 
-        # Add ProxyJump option for VPN server
-        proxy_jump = f"{server_user}@{server_host}:{server_port}"
-        scp_cmd.extend(["-o", f"ProxyJump={proxy_jump}"])
-        scp_cmd.extend(["-o", "StrictHostKeyChecking=no"])
-        scp_cmd.extend(["-o", "UserKnownHostsFile=/dev/null"])
+        temp_filename = f"mcp_transfer_{uuid.uuid4().hex[:8]}"
+        server_temp_path = f"/tmp/{temp_filename}"
 
-        # Add server password if needed
+        # Copy from device to server
+        device_password = "fio"  # Default Foundries device password
+        device_scp_cmd = f"sshpass -p '{device_password}' scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {username}@{device_ip}:{remote_path} {server_temp_path}"
+
+        # SSH to server and execute scp from device
+        ssh_to_server_cmd = ["ssh"]
+        ssh_to_server_cmd.extend(["-o", "StrictHostKeyChecking=no"])
+        ssh_to_server_cmd.extend(["-o", "UserKnownHostsFile=/dev/null"])
+        ssh_to_server_cmd.extend(["-p", str(server_port)])
+        ssh_to_server_cmd.append(f"{server_user}@{server_host}")
+
         if server_password:
-            scp_cmd = ["sshpass", "-p", server_password] + scp_cmd
+            ssh_to_server_cmd = ["sshpass", "-p", server_password] + ssh_to_server_cmd
 
-        # Preserve permissions if requested
+        ssh_to_server_cmd.append(device_scp_cmd)
+
+        # Execute nested command
+        result = subprocess.run(
+            ssh_to_server_cmd, check=False, capture_output=True, text=True, timeout=120
+        )
+
+        if result.returncode != 0:
+            return {
+                "success": False,
+                "error": f"Failed to copy file from device to VPN server: {result.stderr.strip() or 'Unknown error'}",
+                "device_id": device_id,
+                "connection_method": "through_vpn_server",
+            }
+
+        # Step 2: Copy from server to local
+        server_scp_cmd = ["scp"]
+        server_scp_cmd.extend(["-o", "StrictHostKeyChecking=no"])
+        server_scp_cmd.extend(["-o", "UserKnownHostsFile=/dev/null"])
+        server_scp_cmd.extend(["-P", str(server_port)])
         if preserve_permissions:
-            scp_cmd.append("-p")
+            server_scp_cmd.append("-p")
+        server_scp_cmd.append("-C")  # Compression
+        server_scp_cmd.append(f"{server_user}@{server_host}:{server_temp_path}")
+        server_scp_cmd.append(str(local_file))
 
-        # Add compression
-        scp_cmd.append("-C")
+        if server_password:
+            server_scp_cmd = ["sshpass", "-p", server_password] + server_scp_cmd
 
-        # Add source and destination
-        scp_cmd.append(f"{username}@{device_ip}:{remote_path}")
-        scp_cmd.append(str(local_file))
+        # Also clean up temp file on server after copy
+        server_scp_cmd_str = " ".join(server_scp_cmd)
+        cleanup_cmd = f"{server_scp_cmd_str} && sshpass -p '{server_password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {server_port} {server_user}@{server_host} 'rm -f {server_temp_path}'"
 
-        # Execute scp through VPN server
-        result = subprocess.run(scp_cmd, check=False, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(
+            cleanup_cmd, shell=True, check=False, capture_output=True, text=True, timeout=60
+        )
 
         if result.returncode == 0:
             logger.info(
@@ -698,7 +787,10 @@ def sync_directory_to_device(
         from lab_testing.utils.device_access import ssh_to_unified_device
 
         rsync_check_result = ssh_to_unified_device(device_id, "which rsync")
-        if not rsync_check_result.get("success") or not rsync_check_result.get("stdout", "").strip():
+        if (
+            not rsync_check_result.get("success")
+            or not rsync_check_result.get("stdout", "").strip()
+        ):
             error_msg = "rsync is not installed on the remote device"
             logger.error(error_msg)
             return {
@@ -800,20 +892,40 @@ def sync_directory_to_device(
         }
 
     except subprocess.TimeoutExpired:
+        # If timeout and this is a Foundries device, try VPN server fallback
+        if device_type == "foundries":
+            logger.debug(
+                f"Direct rsync timed out for Foundries device {device_id}, trying VPN server fallback"
+            )
+            return _sync_directory_to_device_via_vpn_server(
+                device_info, local_dir, remote_dir, username, exclude, delete
+            )
         error_msg = "Directory sync timed out (300 seconds)"
         logger.error(error_msg)
         return {
             "success": False,
             "error": error_msg,
             "device_id": resolved_device_id,
+            "device_type": device_type,
+            "connection_method": "direct",
         }
     except Exception as e:
+        # If exception and this is a Foundries device, try VPN server fallback
+        if device_type == "foundries":
+            logger.debug(
+                f"Direct rsync exception for Foundries device {device_id}, trying VPN server fallback: {e}"
+            )
+            return _sync_directory_to_device_via_vpn_server(
+                device_info, local_dir, remote_dir, username, exclude, delete
+            )
         error_msg = f"Failed to sync directory: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "success": False,
             "error": error_msg,
             "device_id": resolved_device_id,
+            "device_type": device_type,
+            "connection_method": "direct",
         }
 
 
@@ -914,7 +1026,9 @@ def _sync_directory_to_device_via_vpn_server(
                 "message": f"Directory synced successfully to {remote_dir} via VPN server",
             }
 
-        error_msg = f"Failed to sync directory via VPN server: {result.stderr.strip() or 'Unknown error'}"
+        error_msg = (
+            f"Failed to sync directory via VPN server: {result.stderr.strip() or 'Unknown error'}"
+        )
         logger.error(error_msg)
         return {
             "success": False,
